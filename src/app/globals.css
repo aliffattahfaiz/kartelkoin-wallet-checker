@@ -151,35 +151,47 @@ a[href^="#"] { scroll-margin-top: 80px; }
 
 /* ── Theme overrides ─────────────────────────────────────────
    Obsidian (default): flat dark, zero glow
+   Anvil: slightly elevated bg-0, warmer borders
    Glass: subtle frosted panels with inner light (NOT outer glow)
-   Neon: amber-tinted borders, no outer-glow cosplay
    All themes share: one accent (amber), one radii, same motion-ease.
    ──────────────────────────────────────────────────────────── */
 
+/* Anvil theme — warmer dark, amber-tinged subtle borders */
+[data-theme="anvil"] {
+  --bg-0: #080706;
+  --bg-1: #0c0b0a;
+  --bg-2: #121110;
+  --border: rgba(245, 166, 35, 0.12);
+  --border-hover: rgba(245, 166, 35, 0.22);
+}
+
+[data-theme="anvil"] .bentoCell {
+  box-shadow: inset 0 1px 0 rgba(245, 166, 35, 0.04);
+}
+
+[data-theme="anvil"] .sectionTitle h2 {
+  color: #e8c966;
+}
+
 /* Glass theme — subtle frosted panels, inner light only, NO outer glow */
-[data-theme="dim"] {
+[data-theme="glass"] {
   --bg-0: #0a0a0a;
   --bg-1: #0f0f0f;
   --bg-2: #141414;
 }
 
-[data-theme="dim"] .container {
-  background: var(--bg-0);
+[data-theme="glass"] .priceCharts,
+[data-theme="glass"] .portfolioBento,
+[data-theme="glass"] .bentoCell,
+[data-theme="glass"] .walletCard,
+[data-theme="glass"] .settingsPanel {
+  background: rgba(15, 15, 15, 0.72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
-/* Neon theme — amber-tinted borders only, NO outer glow cosplay */
-[data-theme="neon"] {
-  --border: rgba(245, 166, 35, 0.16);
-  --border-hover: rgba(245, 166, 35, 0.28);
-  --border-soft: rgba(245, 166, 35, 0.08);
-}
-
-[data-theme="neon"] .bentoCell {
-  box-shadow: inset 0 1px 0 rgba(245, 166, 35, 0.04);
-}
-
-[data-theme="neon"] .sectionTitle h2 {
-  color: var(--accent);
+[data-theme="glass"] .bentoCell.total::after {
+  opacity: 0.3;
 }
 
 /* ── Motion timing (shared across themes) ────────────────────

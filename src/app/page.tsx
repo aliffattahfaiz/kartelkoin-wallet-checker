@@ -16,6 +16,7 @@ import {
   Plus,
   Globe,
   Pencil,
+  Sparkles,
 } from 'lucide-react';
 import styles from './page.module.css';
 
@@ -53,8 +54,8 @@ interface ApiResponse {
 }
 
 // ── Theme & Currency ────────────────────────────────────────────────────
-type Theme = 'dark' | 'dim';
-const THEMES: Theme[] = ['dark', 'dim'];
+type Theme = 'dark' | 'anvil' | 'glass';
+const THEMES: Theme[] = ['dark', 'anvil', 'glass'];
 
 const CURRENCIES: { key: Currency; label: string; symbol: string; icon: any }[] = [
   { key: 'usd', label: 'USD', symbol: '$', icon: Globe },
@@ -73,7 +74,12 @@ const usePersistedTheme = (): [Theme, (t: Theme) => void] => {
   const setPersisted = useCallback((t: Theme) => {
     setTheme(t);
     localStorage.setItem('kc-theme', t);
+    document.documentElement.setAttribute('data-theme', t);
   }, []);
+  // Apply saved theme on mount
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
   return [theme, setPersisted];
 };
 
@@ -451,7 +457,7 @@ export default function WalletChecker() {
   const solGroups   = groupedWallets('solana');
   const ethGroups   = groupedWallets('ethereum');
 
-  const themeClass = theme === 'dim' ? 'dim' : '';
+  const themeClass = '';
 
   // ── Wallet card (slim) ────────────────────────────────────
   function SlimWalletCard({ w, chain, idx }: { w: Wallet; chain: 'solana' | 'ethereum'; idx: number }) {
@@ -739,23 +745,40 @@ export default function WalletChecker() {
 
       {/* Loading skeleton */}
       {loading && !error && (
-        <div data-slot="price-charts-skeleton" className={styles.priceCharts}>
-          <div className={styles.priceChartRow}>
-            <div className={styles.priceChartItem}>
-              <div className={styles.skeleton} style={{ height: 10, width: 24, marginBottom: 6 }} />
-              <div className={styles.skeleton} style={{ height: 20, width: 90 }} />
+        <div data-slot="market-overview-skeleton" className={styles.marketOverview}>
+          <div data-slot="price-charts-skeleton" className={styles.priceCharts}>
+            <div className={styles.priceChartRow}>
+              <div className={styles.priceChartItem}>
+                <div className={styles.skeleton} style={{ height: 10, width: 24, marginBottom: 6 }} />
+                <div className={styles.skeleton} style={{ height: 20, width: 90 }} />
+              </div>
+              <div className={styles.priceChartItem}>
+                <div className={styles.skeleton} style={{ height: 10, width: 24, marginBottom: 6 }} />
+                <div className={styles.skeleton} style={{ height: 20, width: 90 }} />
+              </div>
+              <div className={styles.priceChartItem}>
+                <div className={styles.skeleton} style={{ height: 10, width: 24, marginBottom: 6 }} />
+                <div className={styles.skeleton} style={{ height: 20, width: 90 }} />
+              </div>
+              <div className={styles.priceChartItem}>
+                <div className={styles.skeleton} style={{ height: 10, width: 36, marginBottom: 6 }} />
+                <div className={styles.skeleton} style={{ height: 20, width: 90 }} />
+              </div>
             </div>
-            <div className={styles.priceChartItem}>
-              <div className={styles.skeleton} style={{ height: 10, width: 24, marginBottom: 6 }} />
-              <div className={styles.skeleton} style={{ height: 20, width: 90 }} />
+          </div>
+          <div className={styles.portfolioBento}>
+            <div className={styles.bentoCell} style={{ gridColumn: '1 / -1' }}>
+              <div className={styles.bentoLabel}>Total Portfolio</div>
+              <div className={styles.skeleton} style={{ height: 32, width: '40%', marginTop: 6 }} />
             </div>
-            <div className={styles.priceChartItem}>
-              <div className={styles.skeleton} style={{ height: 10, width: 24, marginBottom: 6 }} />
-              <div className={styles.skeleton} style={{ height: 20, width: 90 }} />
+            <div className={`${styles.bentoCell} ${styles['chain-sol-anvil']}`}>
+              <div className={styles.skeleton} style={{ height: 32, width: '50%' }} />
             </div>
-            <div className={styles.priceChartItem}>
-              <div className={styles.skeleton} style={{ height: 10, width: 36, marginBottom: 6 }} />
-              <div className={styles.skeleton} style={{ height: 20, width: 90 }} />
+            <div className={`${styles.bentoCell} ${styles['chain-eth-anvil']}`}>
+              <div className={styles.skeleton} style={{ height: 32, width: '50%' }} />
+            </div>
+            <div className={`${styles.bentoCell} ${styles['chain-stable-anvil']}`}>
+              <div className={styles.skeleton} style={{ height: 32, width: '50%' }} />
             </div>
           </div>
         </div>
@@ -777,80 +800,80 @@ export default function WalletChecker() {
             </div>
           )}
 
-          {/* Price charts — 24h sparklines above portfolio bento */}
+          {/* Price charts + Portfolio bento — unified market overview */}
           {wallets.length > 0 && (
-            <div data-slot="price-charts" className={styles.priceCharts}>
-              <div className={styles.priceChartRow}>
-                <div className={styles.priceChartItem}>
-                  <span className={styles.priceChartLabel}>
-                    <span className={styles.chartDot} style={{ background: '#f59e0b' }} />BTC
-                  </span>
-                  <div className={styles.chartWrapper}>
-                    <SparklineSVG data={sparklines?.bitcoin} height={26} width={110} />
-                  </div>
-                  <div className={styles.priceChartBottom}>
-                    <span className={styles.priceChartValue}>
-                      {prices?.bitcoin?.usd ? formatValue(prices.bitcoin.usd) : '—'}
+            <div data-slot="market-overview" className={styles.marketOverview}>
+              {/* Price charts — 24h sparklines */}
+              <div data-slot="price-charts" className={styles.priceCharts}>
+                <div className={styles.priceChartRow}>
+                  <div className={styles.priceChartItem}>
+                    <span className={styles.priceChartLabel}>
+                      <span className={styles.chartDot} style={{ background: '#f59e0b' }} />BTC
                     </span>
-                    <SparklineChange data={sparklines?.bitcoin} />
+                    <div className={styles.chartWrapper}>
+                      <SparklineSVG data={sparklines?.bitcoin} height={20} width={95} />
+                    </div>
+                    <div className={styles.priceChartBottom}>
+                      <span className={styles.priceChartValue}>
+                        {prices?.bitcoin?.usd ? formatValue(prices.bitcoin.usd) : '—'}
+                      </span>
+                      <SparklineChange data={sparklines?.bitcoin} />
+                    </div>
                   </div>
-                </div>
-                <div className={styles.priceChartItem}>
-                  <span className={styles.priceChartLabel}>
-                    <span className={styles.chartDot} style={{ background: '#9945ff' }} />SOL
-                  </span>
-                  <div className={styles.chartWrapper}>
-                    <SparklineSVG data={sparklines?.solana} height={26} width={110} />
-                  </div>
-                  <div className={styles.priceChartBottom}>
-                    <span className={styles.priceChartValue}>
-                      {prices?.solana?.usd ? formatValue(prices.solana.usd) : '—'}
+                  <div className={styles.priceChartItem}>
+                    <span className={styles.priceChartLabel}>
+                      <span className={styles.chartDot} style={{ background: '#9945ff' }} />SOL
                     </span>
-                    <SparklineChange data={sparklines?.solana} />
+                    <div className={styles.chartWrapper}>
+                      <SparklineSVG data={sparklines?.solana} height={20} width={95} />
+                    </div>
+                    <div className={styles.priceChartBottom}>
+                      <span className={styles.priceChartValue}>
+                        {prices?.solana?.usd ? formatValue(prices.solana.usd) : '—'}
+                      </span>
+                      <SparklineChange data={sparklines?.solana} />
+                    </div>
                   </div>
-                </div>
-                <div className={styles.priceChartItem}>
-                  <span className={styles.priceChartLabel}>
-                    <span className={styles.chartDot} style={{ background: '#627eeb' }} />ETH
-                  </span>
-                  <div className={styles.chartWrapper}>
-                    <SparklineSVG data={sparklines?.ethereum} height={26} width={110} />
-                  </div>
-                  <div className={styles.priceChartBottom}>
-                    <span className={styles.priceChartValue}>
-                      {prices?.ethereum?.usd ? formatValue(prices.ethereum.usd) : '—'}
+                  <div className={styles.priceChartItem}>
+                    <span className={styles.priceChartLabel}>
+                      <span className={styles.chartDot} style={{ background: '#627eeb' }} />ETH
                     </span>
-                    <SparklineChange data={sparklines?.ethereum} />
+                    <div className={styles.chartWrapper}>
+                      <SparklineSVG data={sparklines?.ethereum} height={20} width={95} />
+                    </div>
+                    <div className={styles.priceChartBottom}>
+                      <span className={styles.priceChartValue}>
+                        {prices?.ethereum?.usd ? formatValue(prices.ethereum.usd) : '—'}
+                      </span>
+                      <SparklineChange data={sparklines?.ethereum} />
+                    </div>
                   </div>
-                </div>
-                <div className={styles.priceChartItem}>
-                  <span className={styles.priceChartLabel}>
-                    <span className={styles.chartDot} style={{ background: '#4ade80' }} />USD/IDR
-                  </span>
-                  <div className={styles.chartWrapper}>
-                    <SparklineSVG data={sparklines?.ethereum} height={26} width={110} />
-                  </div>
-                  <div className={styles.priceChartBottom}>
-                    <span className={styles.priceChartValue}>
-                      {prices?.ethereum?.usd && prices?.ethereum?.idr
-                        ? new Intl.NumberFormat('id-ID', {
-                            style: 'currency',
-                            currency: 'IDR',
-                            minimumFractionDigits: 0,
-                            maximumFractionDigits: 0,
-                          }).format(prices.ethereum.idr / prices.ethereum.usd)
-                        : '—'}
+                  <div className={styles.priceChartItem}>
+                    <span className={styles.priceChartLabel}>
+                      <span className={styles.chartDot} style={{ background: '#4ade80' }} />USD/IDR
                     </span>
-                    <SparklineChange data={sparklines?.ethereum} />
+                    <div className={styles.chartWrapper}>
+                      <SparklineSVG data={sparklines?.ethereum} height={20} width={95} />
+                    </div>
+                    <div className={styles.priceChartBottom}>
+                      <span className={styles.priceChartValue}>
+                        {prices?.ethereum?.usd && prices?.ethereum?.idr
+                          ? new Intl.NumberFormat('id-ID', {
+                              style: 'currency',
+                              currency: 'IDR',
+                              minimumFractionDigits: 0,
+                              maximumFractionDigits: 0,
+                            }).format(prices.ethereum.idr / prices.ethereum.usd)
+                          : '—'}
+                      </span>
+                      <SparklineChange data={sparklines?.ethereum} />
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          )}
 
-          {/* Portfolio bento (asymmetric: 1.3fr 1fr 1fr 1fr, varied cells) */}
-          {wallets.length > 0 && (
-            <div className={styles.portfolioBento}>
+              {/* Portfolio bento (symmetric: 1fr 1fr 1fr 1fr) */}
+              <div className={styles.portfolioBento}>
               {/* Total — full width, accent bar */}
               <div className={`${styles.bentoCell} ${styles.total}`}>
                 <div className={styles.bentoLabel}>Total Portfolio</div>
@@ -928,7 +951,9 @@ export default function WalletChecker() {
                 </div>
               </div>
             </div>
+          </div>
           )}
+
 
           {/* Solana section */}
           {solanaWallets.length > 0 && (
@@ -1032,7 +1057,8 @@ export default function WalletChecker() {
                 <div className={styles.themeGrid}>
                   {([
                     { key: 'dark', label: 'Obsidian', icon: Wallet },
-                    { key: 'dim',  label: 'Dim',     icon: Eye },
+                    { key: 'anvil',  label: 'Anvil',     icon: Eye },
+                    { key: 'glass',  label: 'Glass',     icon: Sparkles },
                   ] as const).map(({ key, label, icon: Icon }) => (
                     <button
                       key={key}

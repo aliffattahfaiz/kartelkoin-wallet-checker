@@ -157,28 +157,6 @@
   transform: translateY(0) scale(0.985);
 }
 
-/* ── Portfolio bento (symmetric: 1fr 1fr 1fr 1fr) ────────────── */
-.portfolioBento {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr;
-  gap: 10px;
-  padding: 18px;
-  background: var(--bg-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-card-rest);
-  transition: box-shadow var(--motion-base) var(--motion-ease);
-  margin-bottom: 24px;
-}
-
-.portfolioBento:hover {
-  box-shadow: var(--shadow-card-hover);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .portfolioBento { transition: none; }
-}
-
 /* Total cell — full width, accent bar at top */
 .bentoCell.total {
   grid-column: 1 / -1;
@@ -278,19 +256,47 @@
 }
 
 /* ── Price charts (24h sparklines) ─────────────────────────────── */
+/* ── Market overview (charts + bento unified) ──────────────────── */
+.marketOverview {
+  margin-bottom: 24px;
+}
+
 .priceCharts {
   background: var(--bg-1);
   border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
+  border-bottom: none;
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
   padding: 16px 20px;
-  margin-bottom: 20px;
   box-shadow: var(--shadow-card-rest);
   transition: box-shadow var(--motion-base) var(--motion-ease);
 }
 
 .priceCharts:hover {
   box-shadow: var(--shadow-card-hover);
-  border-color: var(--border-hover);
+}
+
+/* Bento sits inside marketOverview — shares border continuity */
+.portfolioBento {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 10px;
+  padding: 18px 18px 14px;
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+  box-shadow: var(--shadow-card-rest);
+  transition: box-shadow var(--motion-base) var(--motion-ease);
+  margin-bottom: 24px;
+}
+
+.portfolioBento:hover {
+  box-shadow: var(--shadow-card-hover);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marketOverview .portfolioBento,
+  .marketOverview .priceCharts { transition: none; }
 }
 
 .priceChartRow {

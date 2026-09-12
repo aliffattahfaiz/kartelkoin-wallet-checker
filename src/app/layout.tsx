@@ -25,7 +25,7 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${geist.variable} ${mono.variable}`}>
+    <html lang="en" data-theme="dark" className={`${geist.variable} ${mono.variable}`}>
       <body className="antialiased" style={{ fontFamily: "var(--font-geist)" }}>
         {children}
       </body>
