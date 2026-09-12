@@ -1,167 +1,271 @@
-/* Reset — must live in globals.css so CSS modules can remain pure */
+/* ============================================================
+   KartelKoin Wallet Checker - Design Tokens
+   ============================================================ */
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ── Reset ──────────────────────────────────────────────────── */
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
-.glass {
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #1a1a2e;
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--bg-0);
+  color: var(--text-1);
+  font-family: var(--font-geist), -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100dvh;
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--text-1);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(110, 110, 120, 0.35);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(110, 110, 120, 0.55);
+}
+
+/* ── Smooth anchor scrolling ──────────────────────────────── */
+a[href^="#"] {
+  scroll-margin-top: 80px;
+}
+
+/* ── Focus ring ─────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── Theme overrides (applied via class on container) ───────── */
+
+/* Glass theme */
+.glass .container {
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .glass .header {
-  background: rgba(255, 255, 255, 0.2);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.08);
+  border-bottom-color: rgba(255, 255, 255, 0.15);
 }
 
 .glass .walletCard {
-  background: rgba(255, 255, 255, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
 }
 
-.glass .summaryCard {
-  background: rgba(255, 255, 255, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+.glass .walletCard:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.28);
 }
 
-.glass .chainBadge {
-  background: rgba(255, 255, 255, 0.3);
-  color: #1a1a2e;
+.glass .bentoCell {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
-.glass .settingsPanel {
-  background: rgba(255, 255, 255, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  color: #1a1a2e;
+.glass .bentoCell:hover {
+  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.10);
 }
 
-.glass input,
-.glass select,
-.glass button {
-  background: rgba(255, 255, 255, 0.3);
-  color: #1a1a2e;
-  border-color: rgba(255, 255, 255, 0.4);
+.glass .btnSecondary {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.7);
 }
 
-.glass .textInput {
-  background: rgba(255, 255, 255, 0.3);
-  border-color: rgba(255, 255, 255, 0.4);
-  color: #1a1a2e;
+.glass .btnSecondary:hover {
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: #fff;
 }
 
-.glass .tokenSymbol {
-  color: #1a1a2e;
+.glass .tokenRow {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.10);
 }
 
-.glass .toggleSlider {
-  background: rgba(255, 255, 255, 0.5);
+.glass .tokenRow:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.20);
 }
 
-.glass .toggleSlider:after {
-  background: #1a1a2e;
+.glass .addressText {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.glass .addressText:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.glass .explorerBtn {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.glass .explorerBtn:hover {
+  background: rgba(245, 166, 35, 0.15);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 /* Neon theme */
-.neon {
-  background: #0a0a0a;
-  color: #e0e0e0;
-  border-color: #00ffaa33;
+.neon .container {
+  background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(245, 166, 35, 0.05) 0%, transparent 70%);
 }
 
 .neon .header {
-  background: linear-gradient(135deg, #00ffaa22, #0066ff22);
-  border-bottom: 1px solid #00ffaa44;
-  box-shadow: 0 0 30px #00ffaa22, inset 0 0 60px #0066ff11;
-}
-
-.neon h1 {
-  text-shadow: 0 0 20px #00ffaa55, 0 0 40px #0066ff33;
+  border-bottom-color: rgba(245, 166, 35, 0.15);
+  box-shadow: 0 0 30px rgba(245, 166, 35, 0.03);
 }
 
 .neon .walletCard {
-  background: #111111;
-  border: 1px solid #00ffaa44;
-  box-shadow: 0 0 15px #00ffaa11, inset 0 0 20px #0066ff08;
+  background: rgba(245, 166, 35, 0.03);
+  border-color: rgba(245, 166, 35, 0.12);
 }
 
-.neon .summaryCard {
-  background: #111111;
-  border: 1px solid #00ffaa44;
-  box-shadow: 0 0 20px #00ffaa11;
+.neon .walletCard:hover {
+  border-color: rgba(245, 166, 35, 0.22);
+  box-shadow: 0 0 20px rgba(245, 166, 35, 0.06), inset 0 0 20px rgba(245, 166, 35, 0.03);
 }
 
-.neon .chainBadge {
-  background: #00ffaa22;
-  color: #00ffaa;
-  border: 1px solid #00ffaa55;
-  box-shadow: 0 0 10px #00ffaa33;
+.neon .bentoCell {
+  border-color: rgba(245, 166, 35, 0.15);
+  background: rgba(245, 166, 35, 0.02);
 }
 
-.neon .balanceValue,
-.neon .tokenValue {
-  color: #00ffaa;
-  text-shadow: 0 0 10px #00ffaa44;
+.neon .bentoCell:hover {
+  border-color: rgba(245, 166, 35, 0.28);
+  box-shadow: 0 0 24px rgba(245, 166, 35, 0.08);
 }
 
-.neon .settingsPanel {
-  background: #111111;
-  border: 1px solid #00ffaa44;
-  box-shadow: 0 0 30px #00ffaa22;
+.neon .btnSecondary {
+  background: rgba(245, 166, 35, 0.04);
+  border-color: rgba(245, 166, 35, 0.15);
+  color: rgba(245, 166, 35, 0.7);
 }
 
-.neon input,
-.neon select,
-.neon button {
-  background: #1a1a1a;
-  border-color: #00ffaa44;
-  color: #e0e0e0;
+.neon .btnSecondary:hover {
+  background: rgba(245, 166, 35, 0.10);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
-.neon button:hover {
-  border-color: #00ffaa;
-  box-shadow: 0 0 20px #00ffaa33;
+.neon .tokenRow {
+  border-color: rgba(245, 166, 35, 0.10);
 }
 
-.neon .textInput {
-  background: #1a1a1a;
-  border-color: #00ffaa44;
-  color: #e0e0e0;
+.neon .tokenRow:hover {
+  border-color: rgba(245, 166, 35, 0.20);
+  background: rgba(245, 166, 35, 0.04);
 }
 
-.neon .tokenSymbol {
-  color: #00ffaa;
+.neon .addressText {
+  border-color: rgba(245, 166, 35, 0.18);
+  color: rgba(245, 166, 35, 0.7);
 }
 
-.neon .toggleSlider {
-  background: #333;
+.neon .addressText:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 12px rgba(245, 166, 35, 0.15);
 }
 
-.neon .toggleSlider:after {
-  background: #00ffaa;
-  box-shadow: 0 0 10px #00ffaa66;
+.neon .explorerBtn {
+  border-color: rgba(245, 166, 35, 0.15);
+  color: rgba(245, 166, 35, 0.8);
 }
 
-.neon .error {
-  border-color: #ff3366;
-  color: #ff3366;
-  box-shadow: 0 0 20px #ff336633;
+.neon .explorerBtn:hover {
+  background: rgba(245, 166, 35, 0.15);
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 12px rgba(245, 166, 35, 0.20);
 }
 
 .neon .section h2 {
-  text-shadow: 0 0 15px #0066ff55;
+  text-shadow: 0 0 15px rgba(98, 126, 234, 0.3);
 }
 
-.neon .addTokenBtn {
-  border-color: #00ffaa55;
-  color: #00ffaa;
+.neon .errorState {
+  border-color: rgba(239, 68, 68, 0.30);
+  background: rgba(239, 68, 68, 0.05);
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.05);
 }
 
-.neon .addTokenBtn:hover {
-  background: #00ffaa22;
-  box-shadow: 0 0 20px #00ffaa44;
+/* ── Responsive ───────────────────────────────────────────────── */
+
+@media (max-width: 780px) {
+  .container {
+    padding: 0 16px 60px;
+  }
+
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .headerActions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .portfolioBento {
+    grid-template-columns: 1fr;
+    padding: 20px 16px;
+  }
+
+  .portfolioBento .bentoCell:first-child {
+    grid-column: auto;
+  }
+
+  .bentoValue {
+    font-size: 1.5rem;
+  }
+
+  .settingsPanel {
+    padding: 20px 18px;
+    max-width: 100%;
+    max-height: calc(100dvh - 32px);
+  }
+
+  .themeGrid {
+    grid-template-columns: 1fr;
+  }
 }

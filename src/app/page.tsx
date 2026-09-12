@@ -1,6 +1,20 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
+import {
+  Wallet,
+  Copy,
+  Check,
+  Eye,
+  ArrowsClockwise,
+  Gear,
+  MagnifyingGlassPlus,
+  X,
+  Warning,
+  Coin,
+  Stack,
+} from '@phosphor-icons/react';
 import styles from './page.module.css';
 
 // ── Types ───────────────────────────────────────────────────────────────
@@ -10,7 +24,7 @@ interface TokenHolding {
   balance: number;
   decimals: number;
   valueUsd: number;
-  source?: 'onchain' | 'mem0';
+  source?: 'onchain' | 'mem0' | 'user';
 }
 
 interface Wallet {
@@ -20,6 +34,7 @@ interface Wallet {
   nativeBalanceUsd: number;
   tokens: TokenHolding[];
   explorerUrl: string;
+  category?: string;
 }
 
 interface ApiResponse {
@@ -27,7 +42,7 @@ interface ApiResponse {
   prices: { sol: number; eth: number; solChange: number; ethChange: number } | null;
 }
 
-// ── Theme persistence ──────────────────────────────────────────────────
+// ── Theme ───────────────────────────────────────────────────────────────
 type Theme = 'kartelkoin' | 'glass' | 'neon';
 
 function usePersistedTheme(): [Theme, (t: Theme) => void] {
@@ -45,21 +60,27 @@ function usePersistedTheme(): [Theme, (t: Theme) => void] {
   return [theme, setPersisted];
 }
 
-// ── Format helpers ─────────────────────────────────────────────────────
-const formatAddr = (a: string) => a.slice(0, 4) + '…' + a.slice(-4);
+// ── Format helpers ──────────────────────────────────────────────────────
+const formatAddr = (a: string) => a.slice(0, 6) + '…' + a.slice(-4);
+
 const fmt = (n: number, d = 4) =>
   n.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
 
+const fmtCompact = (n: number) => {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M';
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+  return fmt(n, 2);
+};
+
+const fmtUsd = (n: number) =>
+  n.toLocaleString(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 function copyText(text: string): Promise<void> {
-  if (navigator.clipboard?.writeText) {
-    return navigator.clipboard.writeText(text);
-  }
-  // Fallback for localhost / older browsers
+  if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
   return new Promise((res, rej) => {
     const ta = document.createElement('textarea');
     ta.value = text;
-    ta.style.position = 'fixed';
-    ta.style.opacity = '0';
+    ta.style.cssText = 'position:fixed;opacity:0;pointer-events:none';
     document.body.appendChild(ta);
     ta.select();
     try { document.execCommand('copy'); res(); }
@@ -68,25 +89,50 @@ function copyText(text: string): Promise<void> {
   });
 }
 
-// ── Component ──────────────────────────────────────────────────────────
+// ── Token icon helpers ──────────────────────────────────────────────────
+const TOKEN_COLORS: Record<string, string> = {
+  USDC: '#2775ca',
+  USDT: '#2384e0',
+  USDE: '#008cff',
+  USDG: '#8b5cf6',
+};
+
+function tokenIconClass(symbol: string): string {
+  const upper = symbol.toUpperCase();
+  if (TOKEN_COLORS[upper]) return upper.toLowerCase();
+  return 'spls';
+}
+
+// ── Category labels ─────────────────────────────────────────────────────
+const CATEGORY_LABELS: Record<string, { label: string; color: string }> = {
+  main:    { label: 'Main Player',       color: 'var(--solana)' },
+  multi:   { label: 'Multi Chain',       color: 'var(--solana)' },
+  side:    { label: 'Side Player',       color: 'var(--solana)' },
+  ledger:  { label: 'Ledger',            color: 'var(--solana)' },
+  ethereum:{ label: 'Ethereum',          color: 'var(--ethereum)' },
+};
+
+// ── Component ───────────────────────────────────────────────────────────
 export default function WalletChecker() {
-  const [wallets, setWallets]     = useState<Wallet[]>([]);
-  const [loading, setLoading]     = useState(false);
-  const [error, setError]         = useState<string | null>(null);
+  const [wallets, setWallets]          = useState<Wallet[]>([]);
+  const [loading, setLoading]          = useState(true);
+  const [error, setError]              = useState<string | null>(null);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
-  const [settingsOpen, setSettingsOpen]  = useState(false);
-  const [theme, setTheme]         = usePersistedTheme();
-  const [autoRefresh, setAutoRefresh]   = useState(false);
+  const [settingsOpen, setSettingsOpen]   = useState(false);
+  const [theme, setTheme]              = usePersistedTheme();
+  const [autoRefresh, setAutoRefresh]  = useState(false);
   const [refreshInterval, setRefreshInterval] = useState(30);
   const [customTokenInput, setCustomTokenInput] = useState('');
-  const [copiedAddr, setCopiedAddr] = useState<string | null>(null);
+  const [copiedAddr, setCopiedAddr]    = useState<string | null>(null);
+  const [openCategories, setOpenCategories] = useState<Set<string>>(new Set());
+  const reduceMotion = useReducedMotion();
 
   const fetchWallets = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/wallets?source=kartelkoin');
-      if (!res.ok) throw new Error('Failed to fetch wallets from Mem0');
+      const res = await fetch('/api/wallets');
+      if (!res.ok) throw new Error('Failed to fetch wallets');
       const data: ApiResponse = await res.json();
       setWallets(data.wallets);
       setLastRefreshed(new Date());
@@ -97,7 +143,6 @@ export default function WalletChecker() {
     }
   }, []);
 
-  // Initial load + auto-refresh
   useEffect(() => {
     fetchWallets();
     if (autoRefresh) {
@@ -106,24 +151,34 @@ export default function WalletChecker() {
     }
   }, [autoRefresh, refreshInterval, fetchWallets]);
 
-  // ── Derived ──────────────────────────────────────────────────────────
-  const solanaWallets = wallets.filter(w => w.chain === 'solana');
-  const ethereumWallets = wallets.filter(w => w.chain === 'ethereum');
+  // Pre-load custom tokens
+  useEffect(() => {
+    fetch('/api/custom-tokens')
+      .then(r => r.json())
+      .then((data: { solana: string[]; ethereum: string[] } | null) => {
+        if (!data) return;
+        setWallets(prev =>
+          prev.map(w => {
+            const list = w.chain === 'solana' ? data.solana : data.ethereum;
+            if (!list.length) return w;
+            const existingSymbols = new Set(w.tokens.map(t => t.symbol.toLowerCase()));
+            const newTokens = list
+              .filter(s => !existingSymbols.has(s.toLowerCase()))
+              .map(symbol => ({
+                symbol,
+                name: symbol,
+                balance: 0,
+                decimals: 6,
+                valueUsd: 0,
+                source: 'user' as const,
+              }));
+            return { ...w, tokens: [...w.tokens, ...newTokens] };
+          })
+        );
+      })
+      .catch(() => {});
+  }, []);
 
-  const totalUsd = wallets.reduce((sum, w) => {
-    return sum + w.nativeBalanceUsd + w.tokens.reduce((s, t) => s + t.valueUsd, 0);
-  }, 0);
-
-  const totalSol = solanaWallets.reduce((s, w) => s + w.nativeBalance, 0);
-  const totalEth = ethereumWallets.reduce((s, w) => s + w.nativeBalance, 0);
-
-  const prices = wallets.length > 0
-    ? wallets[0]?.nativeBalanceUsd  // cheap proxy: we have prices if we have wallets
-      ? undefined // we'll get prices from API response
-      : undefined
-    : undefined;
-
-  // ── Custom token add (stores in Mem0 via a new API endpoint) ─────────
   const addCustomToken = async (chain: 'solana' | 'ethereum') => {
     const tokens = customTokenInput
       .split(',')
@@ -131,312 +186,580 @@ export default function WalletChecker() {
       .filter(Boolean);
     if (tokens.length === 0) return;
 
-    // Optimistically add to local UI
     setWallets(prev =>
       prev.map(w => {
         if (w.chain !== chain) return w;
-        const existingSymbols = new Set(w.tokens.map(t => t.symbol));
+        const existing = new Set(w.tokens.map(t => t.symbol));
         const newTokens = tokens
-          .filter(s => !existingSymbols.has(s))
+          .filter(s => !existing.has(s))
           .map(symbol => ({
             symbol,
             name: symbol,
             balance: 0,
             decimals: 6,
             valueUsd: 0,
-            source: 'mem0' as const,
+            source: 'user' as const,
           }));
         return { ...w, tokens: [...w.tokens, ...newTokens] };
       })
     );
     setCustomTokenInput('');
-
-    // Persist to Mem0 as a "custom tokens" memory so it survives refresh
     try {
       await fetch('/api/custom-tokens', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chain, tokens }),
       });
-    } catch {
-      // silently ignore — UI already updated
-    }
+    } catch {}
   };
 
-  // ── Copy address ─────────────────────────────────────────────────────
   const handleCopy = async (addr: string) => {
     await copyText(addr);
     setCopiedAddr(addr);
-    setTimeout(() => setCopiedAddr(null), 2000);
+    setTimeout(() => setCopiedAddr(null), 1800);
   };
+
+  const toggleCategory = (cat: string) => {
+    setOpenCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat); else next.add(cat);
+      return next;
+    });
+  };
+
+  // ── Derived ───────────────────────────────────────────────────────────
+  const solanaWallets   = wallets.filter(w => w.chain === 'solana');
+  const ethereumWallets = wallets.filter(w => w.chain === 'ethereum');
+
+  const totalUsd  = wallets.reduce((s, w) => s + w.nativeBalanceUsd + w.tokens.reduce((t, x) => t + x.valueUsd, 0), 0);
+  const totalSol  = solanaWallets.reduce((s, w) => s + w.nativeBalance, 0);
+  const totalEth  = ethereumWallets.reduce((s, w) => s + w.nativeBalance, 0);
+  const totalSolUsd = solanaWallets.reduce((s, w) => s + w.nativeBalanceUsd, 0);
+  const totalEthUsd = ethereumWallets.reduce((s, w) => s + w.nativeBalanceUsd, 0);
+
+  // Group by category
+  const groupedWallets = (chain: 'solana' | 'ethereum') => {
+    const list = chain === 'solana' ? solanaWallets : ethereumWallets;
+    const groups: Record<string, Wallet[]> = {};
+    for (const w of list) {
+      const cat = w.category || 'uncategorized';
+      (groups[cat] ||= []).push(w);
+    }
+    return groups;
+  };
+
+  const solGroups   = groupedWallets('solana');
+  const ethGroups   = groupedWallets('ethereum');
 
   const themeClass = theme === 'glass' ? 'glass' : theme === 'neon' ? 'neon' : '';
 
+  // ── Wallet card renderer (slim) ───────────────────────────────────────
+  function SlimWalletCard({ w, chain, idx }: { w: Wallet; chain: 'solana' | 'ethereum'; idx: number }) {
+    const hasTokens = w.tokens.length > 0;
+
+    return (
+      <motion.div
+        className={styles.walletCard}
+        initial={reduceMotion ? undefined : { opacity: 0, y: 8 }}
+        whileInView={reduceMotion ? undefined : { opacity: 1, y: 0 }}
+        viewport={{ once: true, amount: 0.15 }}
+        transition={{ duration: 0.35, delay: idx * 0.03, ease: [0.16, 1, 0.3, 1] }}
+      >
+        <div className={styles.walletAddress}>
+          <div className={styles.walletAddressInner}>
+            <button
+              className={styles.addressText}
+              onClick={() => handleCopy(w.address)}
+              aria-label={`Copy ${w.address}`}
+              title="Click to copy address"
+            >
+              {formatAddr(w.address)}
+            </button>
+            <span className={`${styles.copyBadge} ${copiedAddr === w.address ? styles.show : ''}`}>
+              <Check size={9} weight="bold" />
+              Copied
+            </span>
+          </div>
+        </div>
+
+        <a
+          href={w.explorerUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={styles.explorerBtn}
+          title={`Open in ${chain === 'solana' ? 'Solscan' : 'Etherscan'}`}
+        >
+          <Eye size={10} weight="bold" />
+          View
+        </a>
+
+        <div className={styles.walletBalance}>
+          <div className={styles.balanceLabel}>
+            {chain === 'solana' ? 'Native (SOL)' : 'Native (ETH)'}
+          </div>
+          <div className={styles.balanceValue}>
+            {fmt(w.nativeBalance, chain === 'solana' ? 4 : 6)}
+            <span style={{ fontSize: '0.625rem', fontWeight: 400, color: 'var(--text-3)', marginLeft: 2 }}>
+              {chain === 'solana' ? 'SOL' : 'ETH'}
+            </span>
+          </div>
+          <div className={styles.balanceRight}>
+            <span className={`${styles.usdValue} ${w.nativeBalanceUsd > 0 ? styles.positive : ''}`}>
+              {fmtUsd(w.nativeBalanceUsd)}
+            </span>
+          </div>
+        </div>
+
+        {hasTokens && (
+          <div className={styles.tokensInline}>
+            {w.tokens.map((t, j) => (
+              <span key={j} className={styles.tokenChip}>
+                <span className={`${styles.tokenIcon} ${styles[tokenIconClass(t.symbol)]}`}>
+                  {t.symbol.slice(0, 2)}
+                </span>
+                <span className={styles.tokenChipSymbol}>{t.symbol}</span>
+                <span className={styles.tokenChipBalance}>
+                  {fmt(t.balance, t.decimals)}
+                </span>
+                <span className={styles.tokenChipUsd}>
+                  {fmtUsd(t.valueUsd)}
+                </span>
+                {t.source === 'user' && (
+                  <span className={styles.tokenChipCustom}>custom</span>
+                )}
+              </span>
+            ))}
+          </div>
+        )}
+      </motion.div>
+    );
+  }
+
+  // ── Category group renderer ───────────────────────────────────────────
+  function CategoryGroup({
+    cat,
+    wallets: catWallets,
+    chain,
+    idx,
+  }: {
+    cat: string;
+    wallets: Wallet[];
+    chain: 'solana' | 'ethereum';
+    idx: number;
+  }) {
+    const info = CATEGORY_LABELS[cat] || { label: cat, color: 'var(--text-3)' };
+    const open = openCategories.has(cat);
+    const totalChainBal = catWallets.reduce((s, w) => s + w.nativeBalanceUsd, 0);
+
+    return (
+      <div className={styles.categoryGroup}>
+        <div
+          className={styles.categoryHeader}
+          onClick={() => toggleCategory(cat)}
+          role="button"
+          aria-expanded={open}
+        >
+          <div className={styles.categoryTitle}>
+            <span className={`${styles.chainDot} ${chain === 'solana' ? styles.sol : styles.eth}`}
+              style={{ width: 7, height: 7, boxShadow: '0 0 6px currentColor' }} />
+            <span className={styles.categoryName}>{info.label}</span>
+            <span className={styles.categoryCount}>{catWallets.length}</span>
+            {totalChainBal > 0 && (
+              <span className={styles.usdValue} style={{ fontSize: '0.625rem', marginLeft: 4 }}>
+                {fmtUsd(totalChainBal)}
+              </span>
+            )}
+          </div>
+          <Stack
+            size={12}
+            weight="bold"
+            className={`${styles.categoryChevron} ${open ? styles.open : ''}`}
+          />
+        </div>
+
+        <AnimatePresence mode="popLayout">
+          {open && (
+            <motion.div
+              className={styles.categoryBody}
+              initial={reduceMotion ? false : { opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+            >
+              <div className={styles.walletList}>
+                {catWallets.map((w, i) => (
+                  <SlimWalletCard key={w.address} w={w} chain={chain} idx={i} />
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    );
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────
   return (
     <div className={`${styles.container} ${themeClass}`}>
       {/* Header */}
       <header className={styles.header}>
-        <h1>KartelKoin Wallet Checker</h1>
+        <div className={styles.headerBrand}>
+          <div className={styles.headerIcon}>
+            <Wallet weight="fill" />
+          </div>
+          <div className={styles.headerTitle}>
+            <h1>KartelKoin Wallet Checker</h1>
+            <span>Live on-chain balances</span>
+          </div>
+        </div>
         <div className={styles.headerActions}>
           <button
             onClick={fetchWallets}
-            className={styles.refreshBtn}
+            className={`${styles.btn} ${styles.btnSecondary}`}
             disabled={loading}
+            title="Refresh"
           >
-            {loading ? 'Refreshing…' : 'Refresh'}
+            <ArrowsClockwise
+              size={13}
+              weight="bold"
+              style={{ animation: loading ? 'spin 0.8s linear infinite' : 'none' }}
+            />
+            {loading ? 'Refreshing' : 'Refresh'}
           </button>
           <button
             onClick={() => setSettingsOpen(v => !v)}
-            className={styles.settingsBtn}
+            className={`${styles.btn} ${styles.btnSecondary}`}
+            title="Settings"
           >
-            Settings
+            <Gear size={13} weight="bold" />
           </button>
         </div>
       </header>
 
       {/* Error */}
-      {error && <div className={styles.error}>{error}</div>}
-
-      {/* Last refreshed */}
-      {lastRefreshed && (
-        <div className={styles.lastRefreshed}>
-          Last refreshed: {lastRefreshed.toLocaleTimeString()}
-          {autoRefresh && ' (auto)'}
-        </div>
-      )}
-
-      {/* Summary cards */}
-      <div className={styles.summary}>
-        <div className={styles.summaryCard}>
-          <span className={styles.summaryLabel}>Total Portfolio</span>
-          <span className={styles.summaryValue}>
-            ${fmt(totalUsd, 2)}
-          </span>
-        </div>
-        <div className={styles.summaryCard}>
-          <span className={styles.summaryLabel}>Solana</span>
-          <span className={styles.summaryValue}>
-            {fmt(totalSol)} SOL
-          </span>
-          <span className={styles.summarySub}>
-            ${fmt(solanaWallets.reduce((s, w) => s + w.nativeBalanceUsd, 0), 2)}
-          </span>
-        </div>
-        <div className={styles.summaryCard}>
-          <span className={styles.summaryLabel}>Ethereum</span>
-          <span className={styles.summaryValue}>
-            {fmt(totalEth)} ETH
-          </span>
-          <span className={styles.summarySub}>
-            ${fmt(ethereumWallets.reduce((s, w) => s + w.nativeBalanceUsd, 0), 2)}
-          </span>
-        </div>
-      </div>
-
-      {/* Solana wallets */}
-      {solanaWallets.length > 0 && (
-        <section className={styles.section}>
-          <h2>Solana Portfolios ({solanaWallets.length})</h2>
-          {solanaWallets.map(w => (
-            <WalletCard
-              key={w.address}
-              wallet={w}
-              copiedAddr={copiedAddr}
-              onCopy={handleCopy}
-              theme={theme}
-            />
-          ))}
-        </section>
-      )}
-
-      {/* Ethereum wallets */}
-      {ethereumWallets.length > 0 && (
-        <section className={styles.section}>
-          <h2>Ethereum Portfolios ({ethereumWallets.length})</h2>
-          {ethereumWallets.map(w => (
-            <WalletCard
-              key={w.address}
-              wallet={w}
-              copiedAddr={copiedAddr}
-              onCopy={handleCopy}
-              theme={theme}
-            />
-          ))}
-        </section>
-      )}
-
-      {/* Empty state */}
-      {wallets.length === 0 && !loading && (
-        <div className={styles.empty}>
-          No wallets found. Add wallet addresses to Mem0 first.
-        </div>
-      )}
-
-      {/* Settings overlay */}
-      {settingsOpen && (
-        <div className={styles.settingsOverlay} onClick={() => setSettingsOpen(false)}>
-          <div className={styles.settingsPanel} onClick={e => e.stopPropagation()}>
-            <h3>Settings</h3>
-
-            <div className={styles.settingGroup}>
-              <label>Theme</label>
-              <div className={styles.themeOptions}>
-                {(['kartelkoin', 'glass', 'neon'] as Theme[]).map(t => (
-                  <button
-                    key={t}
-                    className={theme === t ? styles.activeTheme : ''}
-                    onClick={() => setTheme(t)}
-                  >
-                    {t === 'kartelkoin' ? 'KartelKoin' : t === 'glass' ? 'Glassmorphism' : 'Neon'}
-                  </button>
-                ))}
-              </div>
+      <AnimatePresence>
+        {error && (
+          <motion.div
+            className={styles.emptyState}
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+          >
+            <Warning weight="fill" size={20} className={styles.emptyIcon} style={{ color: 'var(--danger)', opacity: 0.7 }} />
+            <div className={styles.emptyTitle}>{error}</div>
+            <div className={styles.emptyBody}>
+              Could not load wallet data. Check your connection and try again.
             </div>
-
-            <div className={styles.settingGroup}>
-              <label>Auto-refresh</label>
-              <label className={styles.toggle}>
-                <input
-                  type="checkbox"
-                  checked={autoRefresh}
-                  onChange={e => setAutoRefresh(e.target.checked)}
-                />
-                <span className={styles.toggleSlider} />
-              </label>
+            <div className={styles.emptyAction}>
+              <button onClick={fetchWallets} className={`${styles.btn} ${styles.btnSecondary}`}>
+                <ArrowsClockwise size={12} weight="bold" /> Try again
+              </button>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-            {autoRefresh && (
-              <div className={styles.settingGroup}>
-                <label>Refresh interval (minutes)</label>
-                <select
-                  value={refreshInterval}
-                  onChange={e => setRefreshInterval(Number(e.target.value))}
-                  className={styles.select}
-                >
-                  <option value={15}>15</option>
-                  <option value={30}>30</option>
-                  <option value={60}>60</option>
-                </select>
-              </div>
-            )}
-
-            <div className={styles.settingGroup}>
-              <label>
-                Custom tokens <span className={styles.settingHint}>(stored in Mem0)</span>
-              </label>
-              <p className={styles.settingHintDetail}>
-                Comma-separated token symbols (e.g. USDT, USDC, USDG). Added to Mem0 and
-                displayed in each wallet's token list. On-chain balances are fetched from
-                RPC where available.
-              </p>
-              <div className={styles.customTokenRow}>
-                <input
-                  type="text"
-                  value={customTokenInput}
-                  onChange={e => setCustomTokenInput(e.target.value)}
-                  placeholder="USDT, USDC, USDG"
-                  className={styles.textInput}
-                />
-                <div className={styles.addTokenBtns}>
-                  <button
-                    onClick={() => addCustomToken('solana')}
-                    className={styles.addTokenBtn}
-                  >
-                    Add to Solana
-                  </button>
-                  <button
-                    onClick={() => addCustomToken('ethereum')}
-                    className={styles.addTokenBtn}
-                  >
-                    Add to Ethereum
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setSettingsOpen(false)}
-              className={styles.closeSettingsBtn}
-            >
-              Close
-            </button>
+      {/* Loading skeleton */}
+      {loading && !error && (
+        <div className={styles.portfolioBento}>
+          <div className={styles.bentoCell} style={{ gridColumn: '1 / -1' }}>
+            <div className={styles.bentoLabel}>Total Portfolio</div>
+            <div className={styles.skeleton} style={{ height: 32, width: '40%', marginTop: 6 }} />
+            <div className={styles.skeleton} style={{ height: 14, width: '25%', marginTop: 8 }} />
+          </div>
+          <div className={`${styles.bentoCell} ${styles['chain-sol-anvil']}`}>
+            <div className={styles.skeleton} style={{ height: 14, width: '50%', marginBottom: 6 }} />
+            <div className={styles.skeleton} style={{ height: 24, width: 80, marginBottom: 4 }} />
+          </div>
+          <div className={`${styles.bentoCell} ${styles['chain-eth-anvil']}`}>
+            <div className={styles.skeleton} style={{ height: 14, width: '50%', marginBottom: 6 }} />
+            <div className={styles.skeleton} style={{ height: 24, width: 80, marginBottom: 4 }} />
           </div>
         </div>
       )}
-    </div>
-  );
-}
 
-// ── WalletCard sub-component ───────────────────────────────────────────
-function WalletCard({
-  wallet,
-  copiedAddr,
-  onCopy,
-  theme,
-}: {
-  wallet: Wallet;
-  copiedAddr: string | null;
-  onCopy: (addr: string) => void;
-  theme: Theme;
-}) {
-  const isSol = wallet.chain === 'solana';
-
-  return (
-    <div className={styles.walletCard}>
-      <div className={styles.walletHeader}>
-        <span className={`${styles.chainBadge} ${isSol ? '' : styles.eth}`}>
-          {isSol ? 'SOL' : 'ETH'}
-        </span>
-        <span className={styles.address}>
-          <button
-            className={styles.addressCopyBtn}
-            onClick={() => onCopy(wallet.address)}
-            title="Copy address"
-          >
-            {formatAddr(wallet.address)}
-            {copiedAddr === wallet.address && (
-              <span className={styles.copyConfirm}>copied</span>
-            )}
-          </button>
-        </span>
-        <a
-          href={wallet.explorerUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={styles.explorerLink}
-          title="Open in explorer"
-        >
-          View
-        </a>
-      </div>
-
-      <div className={styles.balanceRow}>
-        <span className={styles.balanceLabel}>
-          Native ({isSol ? 'SOL' : 'ETH'})
-        </span>
-        <span className={styles.balanceValue}>
-          {fmt(wallet.nativeBalance, isSol ? 4 : 6)} {isSol ? 'SOL' : 'ETH'}
-        </span>
-      </div>
-
-      {wallet.tokens.length > 0 && (
-        <div className={styles.tokensContainer}>
-          {wallet.tokens.map((t, i) => (
-            <div key={i} className={styles.tokenRow}>
-              <span className={styles.tokenSymbol}>{t.symbol}</span>
-              <span className={styles.tokenBalance}>
-                {fmt(t.balance, t.decimals)}
-              </span>
-              <span className={styles.tokenValue}>
-                ${fmt(t.valueUsd, 2)}
-              </span>
-              {t.source === 'mem0' && (
-                <span className={styles.tokenSource} title="User-added token">⚠</span>
-              )}
+      {/* Content */}
+      {!loading && !error && (
+        <>
+          {/* Empty state */}
+          {wallets.length === 0 && (
+            <div className={styles.emptyState}>
+              <Wallet weight="regular" size={32} className={styles.emptyIcon} />
+              <div className={styles.emptyTitle}>No wallets yet</div>
+              <div className={styles.emptyBody}>
+                Add wallet addresses to the{' '}
+                <code style={{ fontSize: '0.6875rem' }}>wallets.json</code> file in the{' '}
+                <code style={{ fontSize: '0.6875rem' }}>kartelkoin-wallets</code> repo, or import from Mem0.
+              </div>
             </div>
-          ))}
-        </div>
+          )}
+
+          {/* Portfolio bento (asymmetric, varied cells) */}
+          {wallets.length > 0 && (
+            <div className={styles.portfolioBento}>
+              {/* Total — full width, accent bar */}
+              <div className={`${styles.bentoCell} ${styles.total}`}>
+                <div className={styles.bentoLabel}>Total Portfolio</div>
+                <div className={styles.bentoValue}>
+                  {fmtUsd(totalUsd)}
+                </div>
+                {totalUsd > 0 && (
+                  <div className={styles.bentoChainRow}>
+                    <Coin size={11} weight="fill" />
+                    <span className={styles.bentoSub}>
+                      {fmtCompact(totalSol)} SOL +
+                      {fmtCompact(totalEth)} ETH
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Solana cell — purple tint */}
+              <div className={`${styles.bentoCell} ${styles['chain-sol-anvil']}`}>
+                <div className={styles.bentoLabel}>Solana</div>
+                <div className={styles.bentoValue} style={{ fontSize: '1.35rem' }}>
+                  {fmtCompact(totalSol)}
+                  <span style={{ fontSize: '0.625rem', fontWeight: 400, color: 'var(--text-3)', marginLeft: 3 }}>
+                    SOL
+                  </span>
+                </div>
+                <div className={styles.bentoChainRow}>
+                  <span className={`${styles.chainDot} ${styles.sol}`} />
+                  <span className={styles.chainCount}>
+                    {solanaWallets.length} wallet{solanaWallets.length !== 1 ? 's' : ''}
+                  </span>
+                  {totalSolUsd > 0 && (
+                    <span className={styles.usdValue} style={{ marginLeft: 4 }}>
+                      {fmtUsd(totalSolUsd)}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Ethereum cell — blue tint */}
+              <div className={`${styles.bentoCell} ${styles['chain-eth-anvil']}`}>
+                <div className={styles.bentoLabel}>Ethereum</div>
+                <div className={styles.bentoValue} style={{ fontSize: '1.35rem' }}>
+                  {fmtCompact(totalEth)}
+                  <span style={{ fontSize: '0.625rem', fontWeight: 400, color: 'var(--text-3)', marginLeft: 3 }}>
+                    ETH
+                  </span>
+                </div>
+                <div className={styles.bentoChainRow}>
+                  <span className={`${styles.chainDot} ${styles.eth}`} />
+                  <span className={styles.chainCount}>
+                    {ethereumWallets.length} wallet{ethereumWallets.length !== 1 ? 's' : ''}
+                  </span>
+                  {totalEthUsd > 0 && (
+                    <span className={styles.usdValue} style={{ marginLeft: 4 }}>
+                      {fmtUsd(totalEthUsd)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Solana section */}
+          {solanaWallets.length > 0 && (
+            <section className={styles.section}>
+              <div className={styles.sectionHeader}>
+                <div className={styles.sectionTitle}>
+                  <span className={`${styles.chainPill} ${styles.sol}`}>
+                    <Coin size={9} weight="fill" />
+                    Solana
+                  </span>
+                  <h2>Wallets</h2>
+                  <span className={styles.sectionMeta}>{solanaWallets.length}</span>
+                </div>
+              </div>
+              {Object.entries(solGroups).map(([cat, catWallets], idx) => (
+                <CategoryGroup
+                  key={cat}
+                  cat={cat}
+                  wallets={catWallets}
+                  chain="solana"
+                  idx={idx}
+                />
+              ))}
+            </section>
+          )}
+
+          {/* Ethereum section */}
+          {ethereumWallets.length > 0 && (
+            <section className={styles.section}>
+              <div className={styles.sectionHeader}>
+                <div className={styles.sectionTitle}>
+                  <span className={`${styles.chainPill} ${styles.eth}`}>
+                    <Coin size={9} weight="fill" />
+                    Ethereum
+                  </span>
+                  <h2>Wallets</h2>
+                  <span className={styles.sectionMeta}>{ethereumWallets.length}</span>
+                </div>
+              </div>
+              {Object.entries(ethGroups).map(([cat, catWallets], idx) => (
+                <CategoryGroup
+                  key={cat}
+                  cat={cat}
+                  wallets={catWallets}
+                  chain="ethereum"
+                  idx={idx}
+                />
+              ))}
+            </section>
+          )}
+
+          {/* Status bar */}
+          {wallets.length > 0 && (
+            <div className={styles.statusBar}>
+              <span>
+                {lastRefreshed
+                  ? `Updated ${lastRefreshed.toLocaleTimeString()}`
+                  : 'No data yet'}
+              </span>
+              <div className={styles.statusRight}>
+                <span className={styles.statusDot} />
+                <span>Live</span>
+              </div>
+            </div>
+          )}
+        </>
       )}
+
+      {/* Settings overlay */}
+      <AnimatePresence>
+        {settingsOpen && (
+          <motion.div
+            className={styles.settingsOverlay}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setSettingsOpen(false)}
+          >
+            <motion.div
+              className={styles.settingsPanel}
+              initial={{ opacity: 0, y: 12, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.98 }}
+              transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className={styles.settingsPanelHeader}>
+                <h3>Settings</h3>
+                <button
+                  onClick={() => setSettingsOpen(false)}
+                  className={styles.settingsClose}
+                  aria-label="Close settings"
+                >
+                  <X size={14} weight="bold" />
+                </button>
+              </div>
+
+              <div className={styles.settingSection}>
+                <span className={styles.settingLabel}>Theme</span>
+                <div className={styles.themeGrid}>
+                  {([
+                    { key: 'kartelkoin', label: 'Obsidian', icon: Wallet },
+                    { key: 'glass',      label: 'Glass',    icon: Eye },
+                    { key: 'neon',       label: 'Neon',     icon: MagnifyingGlassPlus },
+                  ] as const).map(({ key, label, icon: Icon }) => (
+                    <button
+                      key={key}
+                      className={`${styles.themeOption} ${theme === key ? styles.active : ''}`}
+                      onClick={() => setTheme(key)}
+                    >
+                      <Icon size={16} weight={theme === key ? 'fill' : 'regular'} className={styles.themeOptionIcon} />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className={styles.settingSection}>
+                <span className={styles.settingLabel}>Auto-refresh</span>
+                <div className={styles.settingRow}>
+                  <span style={{ fontSize: '0.6875rem', color: 'var(--text-2)' }}>
+                    Refresh data automatically
+                  </span>
+                  <button
+                    className={`${styles.toggleTrack} ${autoRefresh ? styles.active : ''}`}
+                    onClick={() => setAutoRefresh(v => !v)}
+                    role="switch"
+                    aria-checked={autoRefresh}
+                    aria-label="Toggle auto-refresh"
+                  >
+                    <span className={styles.toggleThumb} />
+                  </button>
+                </div>
+              </div>
+
+              {autoRefresh && (
+                <div className={styles.settingSection}>
+                  <span className={styles.settingLabel}>Refresh interval</span>
+                  <select
+                    value={refreshInterval}
+                    onChange={e => setRefreshInterval(Number(e.target.value))}
+                    className={styles.select}
+                    aria-label="Refresh interval in minutes"
+                  >
+                    <option value={15}>15 minutes</option>
+                    <option value={30}>30 minutes</option>
+                    <option value={60}>60 minutes</option>
+                  </select>
+                </div>
+              )}
+
+              <div className={styles.settingSection}>
+                <span className={styles.settingLabel}>
+                  Custom tokens
+                  <span style={{ fontSize: '0.5rem', color: 'var(--text-3)', marginLeft: 5, fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>
+                    (stored in GitHub)
+                  </span>
+                </span>
+                <p className={styles.settingHint}>
+                  Add token symbols to track per chain. Tokens are saved to the repo and shown in each wallet&apos;s token list.
+                </p>
+                <div className={styles.customTokenRow}>
+                  <input
+                    type="text"
+                    value={customTokenInput}
+                    onChange={e => setCustomTokenInput(e.target.value)}
+                    placeholder="USDT, USDC, USDG"
+                    className={styles.select}
+                    aria-label="Token symbols, comma-separated"
+                  />
+                  <div className={styles.customTokenBtns}>
+                    <button
+                      onClick={() => addCustomToken('solana')}
+                      className={styles.addTokenBtn}
+                      disabled={!customTokenInput.trim()}
+                    >
+                      Add to Solana
+                    </button>
+                    <button
+                      onClick={() => addCustomToken('ethereum')}
+                      className={styles.addTokenBtn}
+                      disabled={!customTokenInput.trim()}
+                    >
+                      Add to Ethereum
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setSettingsOpen(false)}
+                className={`${styles.btn} ${styles.btnPrimary}`}
+                style={{ width: '100%', padding: '8px', marginTop: '4px' }}
+              >
+                Close
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

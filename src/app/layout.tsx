@@ -1,9 +1,8 @@
-import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Geist, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({
-  variable: "--font-inter",
+const geist = Geist({
+  variable: "--font-geist",
   subsets: ["latin"],
   display: "swap",
 });
@@ -14,18 +13,16 @@ const mono = JetBrains_Mono({
   display: "swap",
 });
 
-export const metadata: Metadata = {
+export const metadata = {
   title: "KartelKoin Wallet Checker",
-  description: "View your Solana and Ethereum wallet balances and token holdings in one place. Pulled from Mem0, live on-chain.",
-  icons: {
-    icon: "/favicon.svg",
-  },
+  description: "View your Solana and Ethereum wallet balances and token holdings in one place. Live on-chain.",
+  icons: { icon: "/favicon.ico" },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${mono.variable}`}>
-      <body className="min-h-screen antialiased" style={{ fontFamily: "var(--font-inter)" }}>
+    <html lang="en" className={`${geist.variable} ${mono.variable}`}>
+      <body className="antialiased" style={{ fontFamily: "var(--font-geist)" }}>
         {children}
       </body>
     </html>
