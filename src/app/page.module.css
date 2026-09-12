@@ -277,13 +277,73 @@
   margin-top: 4px;
 }
 
-/* Sparkline container — right-aligned, bottom of cell */
-.bentoSparkline {
-  margin-top: 6px;
+/* ── Price charts (24h sparklines) ─────────────────────────────── */
+.priceCharts {
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow-card-rest);
+  transition: box-shadow var(--motion-base) var(--motion-ease);
+}
+
+.priceCharts:hover {
+  box-shadow: var(--shadow-card-hover);
+  border-color: var(--border-hover);
+}
+
+.priceChartRow {
   display: flex;
-  justify-content: flex-end;
   align-items: flex-end;
-  height: 18px;
+  gap: 24px;
+  justify-content: space-between;
+}
+
+@supports not (gap: 24px) {
+  .priceChartRow { justify-content: space-between; }
+}
+
+.priceChartItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 60px;
+  flex: 1;
+}
+
+.priceChartLabel {
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-bottom: 4px;
+}
+
+.chartDot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.chartWrapper {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  height: 26px;
+}
+
+.priceChartValue {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-1);
+  margin-top: 2px;
 }
 
 /* Chain dots — solid fill, NO glow */
@@ -951,6 +1011,10 @@
    OpenSourceUI uses base + md:, not sm:
    ────────────────────────────────────────────────────────── */
 @media (max-width: 780px) {
+  .priceChartRow {
+    gap: 16px;
+  }
+
   .portfolioBento {
     grid-template-columns: 1fr;
     padding: 14px;
