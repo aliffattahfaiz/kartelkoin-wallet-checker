@@ -240,7 +240,7 @@ function SparklineSVG({ data, height = 24, width = 100 }: {
         points={points}
         fill="none"
         stroke="var(--accent)"
-        strokeWidth="1"
+        strokeWidth="1.5"
         strokeLinejoin="round"
         strokeLinecap="round"
         style={{ filter: 'url(#soft)' }}

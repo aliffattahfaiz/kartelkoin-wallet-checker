@@ -157,10 +157,10 @@
   transform: translateY(0) scale(0.985);
 }
 
-/* ── Portfolio bento (asymmetric: 1.3fr 1fr 1fr 1fr) ────────────── */
+/* ── Portfolio bento (symmetric: 1fr 1fr 1fr 1fr) ────────────── */
 .portfolioBento {
   display: grid;
-  grid-template-columns: 1.3fr 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
   gap: 10px;
   padding: 18px;
   background: var(--bg-1);
@@ -436,7 +436,7 @@
   padding: 1px 5px;
   border-radius: 3px;
   white-space: nowrap;
-  margin-left: 4px;
+  margin-left: 6px;
 }
 
 .pnlPositive { background: rgba(74, 222, 128, 0.12); color: #4ade80; }
@@ -508,7 +508,13 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  flex-wrap: nowrap;
+}
+
+.addressText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ── Sections ────────────────────────────────────────────────── */
@@ -747,9 +753,10 @@
 .walletBalance {
   grid-column: 1 / -1;
   grid-row: 2 / 3;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto;
   align-items: baseline;
-  justify-content: space-between;
+  gap: 8px;
   padding-top: 5px;
   border-top: 1px solid var(--border-soft);
 }
@@ -757,6 +764,7 @@
 .balanceLabel {
   font-size: 0.625rem;
   color: var(--text-3);
+  font-weight: 600;
   letter-spacing: 0.03em;
   text-transform: uppercase;
 }
@@ -771,7 +779,9 @@
 
 .balanceRight {
   display: flex;
-  align-items: baseline;
+  align-items: center;
+  gap: 4px;
+  justify-content: flex-end;
 }
 
 /* ── Tokens (inline chips) ──────────────────────────────────── */
