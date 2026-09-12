@@ -346,6 +346,20 @@
   margin-top: 2px;
 }
 
+.priceChartBottom {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  justify-content: center;
+}
+
+.priceChartChange {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 /* Chain dots — solid fill, NO glow */
 .chainDot {
   width: 5px;

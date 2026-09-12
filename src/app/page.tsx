@@ -149,21 +149,35 @@ function SparklineSVG({ data, height = 24, width = 100 }: {
     const y = height * (1 - (v - min) / range);
     return `${x},${y}`;
   }).join(' ');
-  const isPositive = data[data.length - 1] >= data[0];
-  const strokeColor = isPositive ? '#4ade80' : '#f87171';
 
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ overflow: 'visible' }}>
       <polyline
         points={points}
         fill="none"
-        stroke={strokeColor}
+        stroke="var(--accent)"
         strokeWidth="1"
         strokeLinejoin="round"
         strokeLinecap="round"
         style={{ filter: 'url(#soft)' }}
       />
     </svg>
+  );
+}
+
+// ── 24h % change from sparkline data ──────────────────────────────────
+function SparklineChange({ data }: { data: number[] | undefined }) {
+  if (!data || data.length < 2) return null;
+  const first = data[0];
+  const last = data[data.length - 1];
+  const change = ((last - first) / first) * 100;
+  const isPositive = change >= 0;
+  const color = isPositive ? '#4ade80' : '#f87171';
+  const sign = isPositive ? '+' : '';
+  return (
+    <span className={styles.priceChartChange} style={{ color }}>
+      {sign}{change.toFixed(2)}%
+    </span>
   );
 }
 
@@ -615,9 +629,12 @@ export default function WalletChecker() {
                   <div className={styles.chartWrapper}>
                     <SparklineSVG data={sparklines?.bitcoin} height={26} width={110} />
                   </div>
-                  <span className={styles.priceChartValue}>
-                    {prices?.bitcoin?.usd ? formatValue(prices.bitcoin.usd) : '—'}
-                  </span>
+                  <div className={styles.priceChartBottom}>
+                    <span className={styles.priceChartValue}>
+                      {prices?.bitcoin?.usd ? formatValue(prices.bitcoin.usd) : '—'}
+                    </span>
+                    <SparklineChange data={sparklines?.bitcoin} />
+                  </div>
                 </div>
                 <div className={styles.priceChartItem}>
                   <span className={styles.priceChartLabel}>
@@ -626,9 +643,12 @@ export default function WalletChecker() {
                   <div className={styles.chartWrapper}>
                     <SparklineSVG data={sparklines?.solana} height={26} width={110} />
                   </div>
-                  <span className={styles.priceChartValue}>
-                    {prices?.solana?.usd ? formatValue(prices.solana.usd) : '—'}
-                  </span>
+                  <div className={styles.priceChartBottom}>
+                    <span className={styles.priceChartValue}>
+                      {prices?.solana?.usd ? formatValue(prices.solana.usd) : '—'}
+                    </span>
+                    <SparklineChange data={sparklines?.solana} />
+                  </div>
                 </div>
                 <div className={styles.priceChartItem}>
                   <span className={styles.priceChartLabel}>
@@ -637,9 +657,12 @@ export default function WalletChecker() {
                   <div className={styles.chartWrapper}>
                     <SparklineSVG data={sparklines?.ethereum} height={26} width={110} />
                   </div>
-                  <span className={styles.priceChartValue}>
-                    {prices?.ethereum?.usd ? formatValue(prices.ethereum.usd) : '—'}
-                  </span>
+                  <div className={styles.priceChartBottom}>
+                    <span className={styles.priceChartValue}>
+                      {prices?.ethereum?.usd ? formatValue(prices.ethereum.usd) : '—'}
+                    </span>
+                    <SparklineChange data={sparklines?.ethereum} />
+                  </div>
                 </div>
                 <div className={styles.priceChartItem}>
                   <span className={styles.priceChartLabel}>
@@ -648,9 +671,12 @@ export default function WalletChecker() {
                   <div className={styles.chartWrapper}>
                     <SparklineSVG data={sparklines?.ethereum} height={26} width={110} />
                   </div>
-                  <span className={styles.priceChartValue}>
-                    {prices?.ethereum?.usd && prices?.ethereum?.idr ? formatValue(prices.ethereum.idr / prices.ethereum.usd) : '—'}
-                  </span>
+                  <div className={styles.priceChartBottom}>
+                    <span className={styles.priceChartValue}>
+                      {prices?.ethereum?.usd && prices?.ethereum?.idr ? formatValue(prices.ethereum.idr / prices.ethereum.usd) : '—'}
+                    </span>
+                    <SparklineChange data={sparklines?.ethereum} />
+                  </div>
                 </div>
               </div>
             </div>
