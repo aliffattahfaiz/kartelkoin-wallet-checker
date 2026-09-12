@@ -957,7 +957,7 @@ export default function WalletChecker() {
 
           {/* Solana section */}
           {solanaWallets.length > 0 && (
-            <section data-slot="solana-section" className={`${styles.section} ${styles.walletSectionCard}`}>
+            <section data-slot="solana-section" className={styles.section}>
               <div className={styles.sectionHeader}>
                 <div className={styles.sectionTitle}>
                   <span className={`${styles.chainPill} ${styles.sol}`}>
@@ -981,7 +981,7 @@ export default function WalletChecker() {
 
           {/* Ethereum section */}
           {ethereumWallets.length > 0 && (
-            <section data-slot="ethereum-section" className={`${styles.section} ${styles.walletSectionCard}`}>
+            <section data-slot="ethereum-section" className={styles.section}>
               <div className={styles.sectionHeader}>
                 <div className={styles.sectionTitle}>
                   <span className={`${styles.chainPill} ${styles.eth}`}>

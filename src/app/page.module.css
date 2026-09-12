@@ -528,23 +528,6 @@
   margin-bottom: 22px;
 }
 
-/* ── Wallet section card (Solana/Ethereum) ───────────────────── */
-.walletSectionCard {
-  background: var(--bg-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-card-rest);
-  transition: box-shadow var(--motion-base) var(--motion-ease);
-}
-
-.walletSectionCard:hover {
-  box-shadow: var(--shadow-card-hover);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .walletSectionCard { transition: none; }
-}
-
 .sectionTitle {
   display: flex;
   align-items: center;
@@ -600,14 +583,28 @@
 
 /* ── Category group ──────────────────────────────────────────── */
 .categoryGroup {
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card-rest);
+  transition: box-shadow var(--motion-base) var(--motion-ease);
   margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.categoryGroup:hover {
+  box-shadow: var(--shadow-card-hover);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .categoryGroup { transition: none; }
 }
 
 .categoryHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 6px;
+  padding: 10px 12px;
   cursor: pointer;
   user-select: none;
   border-bottom: 1px solid var(--border-soft);
@@ -652,6 +649,7 @@
 
 .categoryBody {
   overflow: hidden;
+  padding: 8px 12px 4px;
   transition: max-height 0.35s var(--motion-ease), opacity 0.25s;
 }
 
