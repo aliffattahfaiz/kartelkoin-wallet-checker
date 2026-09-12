@@ -9,6 +9,7 @@ const BASE_RAW   = `https://raw.githubusercontent.com/${GITHUB_REPO}/main`;
 const SOLANA_RPC  = process.env.SOLANA_RPC_URL  || 'https://api.mainnet-beta.solana.com';
 const ETH_RPC     = process.env.ETH_RPC_URL     || 'https://ethereum-rpc.publicnode.com';
 const COINGECKO   = 'https://api.coingecko.com/api/v3/simple/price';
+const COINGECKO_MARKET_CHART = 'https://api.coingecko.com/api/v3/coins';
 
 // ── Known token lists ───────────────────────────────────────────────────
 const SOL_STABLECOINS: Record<string, { symbol: string; decimals: number; coingeckoId: string }> = {
@@ -24,6 +25,7 @@ const ETH_STABLECOINS: Record<string, { symbol: string; decimals: number; coinge
 // Coins we fetch prices for
 const COIN_IDS = ['solana', 'ethereum', 'bitcoin', 'tether', 'usd-coin', 'usd-e'];
 const VS_CURRENCIES = ['usd', 'eur', 'idr', 'jpy', 'gbp'];
+const SPARKLINE_COINS = ['bitcoin', 'ethereum', 'solana'];
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -249,6 +251,23 @@ async function getCoinGeckoPrices(): Promise<Record<string, Record<string, numbe
   } catch { return {}; }
 }
 
+// Fetch 24h price history (sparkline) for a list of coins
+async function getSparklineData(coins: string[]): Promise<Record<string, number[]> | null> {
+  try {
+    const results = await Promise.all(
+      coins.map(async (id) => {
+        const res = await fetch(
+          `${COINGECKO_MARKET_CHART}/${id}/market_chart?vs_currency=usd&days=1`,
+          { signal: AbortSignal.timeout(8000) }
+        );
+        const data = await res.json();
+        return { id, prices: data.prices?.map((p: [number, number]) => p[1]) || [] };
+      })
+    );
+    return Object.fromEntries(results.map(r => [r.id, r.prices]));
+  } catch { return null; }
+}
+
 // ── Explorer URLs ───────────────────────────────────────────────────────
 function explorerUrl(addr: string, chain: 'solana' | 'ethereum'): string {
   return chain === 'solana'
@@ -283,11 +302,13 @@ export async function GET(req: NextRequest) {
 
     if (walletData.length === 0) {
       const prices = await getCoinGeckoPrices();
-      return NextResponse.json({ wallets: [], prices });
+      const sparklines = await getSparklineData(SPARKLINE_COINS);
+      return NextResponse.json({ wallets: [], prices, sparklines });
     }
 
     // 2. Fetch all prices (multi-currency) concurrently with on-chain fetches
     const pricesP = getCoinGeckoPrices();
+    const sparklinesP = getSparklineData(SPARKLINE_COINS);
 
     const solWallets = walletData.filter(w => w.chain === 'solana');
     const ethWallets = walletData.filter(w => w.chain === 'ethereum');
@@ -296,12 +317,13 @@ export async function GET(req: NextRequest) {
     const ethAddrs = ethWallets.map(w => w.address);
 
     // 3. Batch on-chain fetches
-    const [solBalancesP, solTokenAccountsP, ethBalancesP, ethTokenBalancesP, prices] = await Promise.all([
+    const [solBalancesP, solTokenAccountsP, ethBalancesP, ethTokenBalancesP, prices, sparklines] = await Promise.all([
       getSolBalancesBatch(solAddrs),
       getSolTokenAccountsBatch(solAddrs),
       getEthBalancesBatch(ethAddrs),
       getErc20BalancesBatch(ethAddrs, ETH_STABLECOINS),
       pricesP,
+      sparklinesP,
     ]);
 
     // 4. Build Solana wallet results
@@ -386,7 +408,7 @@ export async function GET(req: NextRequest) {
     });
 
     const finalWallets = [...solResults, ...ethResults];
-    return NextResponse.json({ wallets: finalWallets, prices });
+    return NextResponse.json({ wallets: finalWallets, prices, sparklines });
   } catch (err: any) {
     console.error('Wallet fetch error:', err);
     return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });

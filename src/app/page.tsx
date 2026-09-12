@@ -46,6 +46,7 @@ type Currency = 'usd' | 'eur' | 'idr' | 'jpy' | 'gbp';
 interface ApiResponse {
   wallets: Wallet[];
   prices: PriceMap;
+  sparklines: Record<string, number[]>;
 }
 
 // ── Theme & Currency ────────────────────────────────────────────────────
@@ -130,6 +131,43 @@ function copyText(text: string): Promise<void> {
   });
 }
 
+// ── Sparkline SVG (from price array) ──────────────────────────────────
+function SparklineSVG({ data, color, height = 24, width = 100 }: {
+  data: number[] | undefined;
+  color: string;
+  height?: number;
+  width?: number;
+}) {
+  if (!data || data.length < 2) {
+    return <span style={{ fontSize: '0.625rem', color: 'var(--text-3)' }}>—</span>;
+  }
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1;
+  const step = width / (data.length - 1);
+  const points = data.map((v, i) => {
+    const x = i * step;
+    const y = height * (1 - (v - min) / range);
+    return `${x},${y}`;
+  }).join(' ');
+  const isPositive = data[data.length - 1] >= data[0];
+  const strokeColor = isPositive ? '#4ade80' : '#f87171';
+
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ overflow: 'visible' }}>
+      <polyline
+        points={points}
+        fill="none"
+        stroke={strokeColor}
+        strokeWidth="1"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        style={{ filter: 'url(#soft)' }}
+      />
+    </svg>
+  );
+}
+
 // ── Token icon helpers ──────────────────────────────────────────────────
 const TOKEN_COLORS: Record<string, string> = {
   USDC: '#2775ca',
@@ -168,6 +206,7 @@ export default function WalletChecker() {
   const [copiedAddr, setCopiedAddr]    = useState<string | null>(null);
   const [openCategories, setOpenCategories] = useState<Set<string>>(new Set());
   const [prices, setPrices]            = useState<PriceMap | null>(null);
+  const [sparklines, setSparklines]     = useState<Record<string, number[]> | null>(null);
   const reduceMotion = useReducedMotion();
 
   const fetchWallets = useCallback(async () => {
@@ -179,6 +218,7 @@ export default function WalletChecker() {
       const data: ApiResponse = await res.json();
       setWallets(data.wallets);
       setPrices(data.prices);
+      setSparklines(data.sparklines);
       setLastRefreshed(new Date());
     } catch (err: any) {
       setError(err.message || 'Something went wrong');
@@ -534,11 +574,17 @@ export default function WalletChecker() {
             <div className={styles.skeleton} style={{ height: 14, width: '25%', marginTop: 8 }} />
           </div>
           <div className={`${styles.bentoCell} ${styles['chain-sol-anvil']}`}>
+            <div className={styles.bentoLabel}>Solana</div>
             <div className={styles.skeleton} style={{ height: 14, width: '50%', marginBottom: 6 }} />
             <div className={styles.skeleton} style={{ height: 24, width: 80, marginBottom: 4 }} />
           </div>
           <div className={`${styles.bentoCell} ${styles['chain-eth-anvil']}`}>
+            <div className={styles.bentoLabel}>Ethereum</div>
             <div className={styles.skeleton} style={{ height: 14, width: '50%', marginBottom: 6 }} />
+            <div className={styles.skeleton} style={{ height: 24, width: 80, marginBottom: 4 }} />
+          </div>
+          <div className={`${styles.bentoCell} ${styles['chain-stable-anvil']}`}>
+            <div className={styles.bentoLabel}>Stablecoins</div>
             <div className={styles.skeleton} style={{ height: 24, width: 80, marginBottom: 4 }} />
           </div>
         </div>
@@ -560,7 +606,7 @@ export default function WalletChecker() {
             </div>
           )}
 
-          {/* Portfolio bento (asymmetric: 1.6fr 1fr 1fr, varied cells) */}
+          {/* Portfolio bento (asymmetric: 1.3fr 1fr 1fr 1fr, varied cells) */}
           {wallets.length > 0 && (
             <div className={styles.portfolioBento}>
               {/* Total — full width, accent bar */}
@@ -577,6 +623,9 @@ export default function WalletChecker() {
                     </span>
                   </div>
                 )}
+                <div className={styles.bentoSparkline}>
+                  <SparklineSVG data={sparklines?.bitcoin} color="var(--accent)" height={20} width={100} />
+                </div>
               </div>
 
               {/* Solana cell — purple tint */}
@@ -598,6 +647,9 @@ export default function WalletChecker() {
                       {formatValue(totalSolValue)}
                     </span>
                   )}
+                </div>
+                <div className={styles.bentoSparkline}>
+                  <SparklineSVG data={sparklines?.solana} color="#9945ff" height={18} width={90} />
                 </div>
               </div>
 
@@ -621,6 +673,9 @@ export default function WalletChecker() {
                     </span>
                   )}
                 </div>
+                <div className={styles.bentoSparkline}>
+                  <SparklineSVG data={sparklines?.ethereum} color="#627eeb" height={18} width={90} />
+                </div>
               </div>
 
               {/* Stablecoins cell — green tint */}
@@ -634,6 +689,9 @@ export default function WalletChecker() {
                   <span className={styles.chainCount}>
                     SOL: {formatValue(solStableValue)} | ETH: {formatValue(ethStableValue)}
                   </span>
+                </div>
+                <div className={styles.bentoSparkline}>
+                  <SparklineSVG data={sparklines?.['usd-coin']} color="#4ade80" height={18} width={90} />
                 </div>
               </div>
             </div>
