@@ -17,6 +17,10 @@ export const metadata = {
   title: "KartelKoin Wallet Checker",
   description: "View your Solana and Ethereum wallet balances and token holdings in one place. Live on-chain.",
   icons: { icon: "/favicon.ico" },
+  metadataBase: new URL("https://check.kartelkoin.xyz"),
+  other: {
+    "msapplication-TileColor": "#111111",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
