@@ -154,6 +154,7 @@ export async function GET(req: NextRequest) {
       .map((w: any) => ({
         address: w.address,
         chain: w.chain as 'solana' | 'ethereum',
+        category: w.category || 'uncategorized',
         tokens: (w.tokens || []) as any[],
       }));
 
@@ -199,6 +200,7 @@ export async function GET(req: NextRequest) {
         return {
           address: w.address,
           chain: 'solana' as const,
+          category: w.category,
           nativeBalance: nativeBal,
           nativeBalanceUsd: nativeBal * prices.sol,
           tokens: [...Object.values(knownTokens), ...memTokens],
@@ -237,6 +239,7 @@ export async function GET(req: NextRequest) {
         return {
           address: w.address,
           chain: 'ethereum' as const,
+          category: w.category,
           nativeBalance: nativeBal,
           nativeBalanceUsd: nativeBal * prices.eth,
           tokens: [...onchainTokens, ...memTokens],
