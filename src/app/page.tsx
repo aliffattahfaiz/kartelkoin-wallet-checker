@@ -13,6 +13,7 @@ import {
   AlertCircle,
   Coins,
   ChevronDown,
+  Plus,
 } from 'lucide-react';
 import styles from './page.module.css';
 
@@ -672,7 +673,7 @@ export default function WalletChecker() {
                 <div className={styles.themeGrid}>
                   {([
                     { key: 'dark', label: 'Obsidian', icon: Wallet },
-                    { key: 'dim',  label: 'Dim',     icon: Settings },
+                    { key: 'dim',  label: 'Dim',     icon: Eye },
                   ] as const).map(({ key, label, icon: Icon }) => (
                     <button
                       key={key}

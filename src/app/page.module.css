@@ -501,7 +501,7 @@
   opacity: 0;
   transform: translateY(-2px);
   pointer-events: none;
-  transition: all 0.2s var(--motion-ease);
+  transition: opacity 0.2s var(--motion-ease), transform 0.2s var(--motion-ease);
 }
 
 .copyBadge.show {
@@ -525,8 +525,8 @@
   letter-spacing: 0.03em;
   text-transform: uppercase;
   text-decoration: none;
-  transition: all var(--motion-base) var(--motion-ease);
-  flex-shrink: 0;
+  transition: background-color var(--motion-base) var(--motion-ease), border-color var(--motion-base) var(--motion-ease), color var(--motion-base) var(--motion-ease);
+  text-decoration: none;
 }
 
 .explorerBtn:hover {
@@ -727,8 +727,6 @@
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -746,8 +744,6 @@
   max-height: calc(100dvh - 48px);
   overflow-y: auto;
   box-shadow: var(--shadow-panel-rest);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
 }
 
 .settingsPanelHeader {
@@ -775,7 +771,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all var(--motion-base) var(--motion-ease);
+  transition: background-color var(--motion-base) var(--motion-ease), color var(--motion-base) var(--motion-ease), border-color var(--motion-base) var(--motion-ease);
 }
 
 .settingsClose:hover {
@@ -824,7 +820,7 @@
   font-size: 0.6875rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all var(--motion-fast) var(--motion-ease);
+  transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
   text-align: center;
   font-family: inherit;
 }
@@ -853,7 +849,7 @@
   border: 1px solid var(--border);
   position: relative;
   cursor: pointer;
-  transition: all 0.18s var(--motion-ease);
+  transition: background-color 0.18s var(--motion-ease), border-color 0.18s var(--motion-ease);
   flex-shrink: 0;
 }
 
@@ -870,7 +866,7 @@
   height: 11px;
   border-radius: 50%;
   background: var(--text-2);
-  transition: all 0.18s var(--motion-ease);
+  transition: transform 0.18s var(--motion-ease), background-color 0.18s var(--motion-ease);
 }
 
 .toggleTrack.active .toggleThumb {
@@ -887,7 +883,7 @@
   font-size: 0.6875rem;
   font-family: var(--font-mono);
   cursor: pointer;
-  transition: all var(--motion-fast) var(--motion-ease);
+  transition: background-color var(--motion-base) var(--motion-ease), border-color var(--motion-base) var(--motion-ease), color var(--motion-base) var(--motion-ease);
 }
 
 .select:hover {
@@ -916,7 +912,7 @@
   font-size: 0.6875rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all var(--motion-base) var(--motion-ease);
+  transition: background-color var(--motion-base) var(--motion-ease), color var(--motion-base) var(--motion-ease);
   white-space: nowrap;
   font-family: inherit;
 }

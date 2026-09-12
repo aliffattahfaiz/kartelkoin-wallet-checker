@@ -156,29 +156,15 @@ a[href^="#"] { scroll-margin-top: 80px; }
    All themes share: one accent (amber), one radii, same motion-ease.
    ──────────────────────────────────────────────────────────── */
 
-/* Glass theme — frosted panels, inner light only */
-[data-theme="glass"] {
-  --bg-0: #050505;
-  --bg-1: rgba(255, 255, 255, 0.04);
-  --bg-2: rgba(255, 255, 255, 0.07);
+/* Glass theme — subtle frosted panels, inner light only, NO outer glow */
+[data-theme="dim"] {
+  --bg-0: #0a0a0a;
+  --bg-1: #0f0f0f;
+  --bg-2: #141414;
 }
 
-[data-theme="glass"] .container {
-  background: rgba(255, 255, 255, 0.02);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
-
-[data-theme="glass"] .header {
-  background: rgba(255, 255, 255, 0.04);
-  border-bottom-color: rgba(255, 255, 255, 0.08);
-}
-
-[data-theme="glass"] .panel {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+[data-theme="dim"] .container {
+  background: var(--bg-0);
 }
 
 /* Neon theme — amber-tinted borders only, NO outer glow cosplay */
