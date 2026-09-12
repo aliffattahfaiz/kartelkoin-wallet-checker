@@ -673,7 +673,14 @@ export default function WalletChecker() {
                   </div>
                   <div className={styles.priceChartBottom}>
                     <span className={styles.priceChartValue}>
-                      {prices?.ethereum?.usd && prices?.ethereum?.idr ? formatValue(prices.ethereum.idr / prices.ethereum.usd) : '—'}
+                      {prices?.ethereum?.usd && prices?.ethereum?.idr
+                        ? new Intl.NumberFormat('id-ID', {
+                            style: 'currency',
+                            currency: 'IDR',
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 0,
+                          }).format(prices.ethereum.idr / prices.ethereum.usd)
+                        : '—'}
                     </span>
                     <SparklineChange data={sparklines?.ethereum} />
                   </div>
