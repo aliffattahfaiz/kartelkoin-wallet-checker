@@ -14,6 +14,7 @@ import {
   Coins,
   ChevronDown,
   Plus,
+  Globe,
 } from 'lucide-react';
 import styles from './page.module.css';
 
@@ -24,6 +25,7 @@ interface TokenHolding {
   balance: number;
   decimals: number;
   valueUsd: number;
+  coingeckoId?: string;
   source?: 'onchain' | 'mem0' | 'user';
 }
 
@@ -37,14 +39,26 @@ interface Wallet {
   category?: string;
 }
 
+// Multi-currency prices: { solana: {usd,eur,idr,...}, ethereum: {...}, tether: {...}, ... }
+type PriceMap = Record<string, Record<string, number>>;
+type Currency = 'usd' | 'eur' | 'idr' | 'jpy' | 'gbp';
+
 interface ApiResponse {
   wallets: Wallet[];
-  prices: { sol: number; eth: number; solChange: number; ethChange: number } | null;
+  prices: PriceMap;
 }
 
-// ── Theme ───────────────────────────────────────────────────────────────
+// ── Theme & Currency ────────────────────────────────────────────────────
 type Theme = 'dark' | 'dim';
 const THEMES: Theme[] = ['dark', 'dim'];
+
+const CURRENCIES: { key: Currency; label: string; symbol: string; icon: any }[] = [
+  { key: 'usd', label: 'USD', symbol: '$', icon: Globe },
+  { key: 'eur', label: 'EUR', symbol: '€', icon: Globe },
+  { key: 'idr', label: 'IDR', symbol: 'Rp', icon: Globe },
+  { key: 'jpy', label: 'JPY', symbol: '¥', icon: Globe },
+  { key: 'gbp', label: 'GBP', symbol: '£', icon: Globe },
+];
 
 const usePersistedTheme = (): [Theme, (t: Theme) => void] => {
   const [theme, setTheme] = useState<Theme>(() => {
@@ -59,6 +73,19 @@ const usePersistedTheme = (): [Theme, (t: Theme) => void] => {
   return [theme, setPersisted];
 };
 
+const usePersistedCurrency = (): [Currency, (c: Currency) => void] => {
+  const [currency, setCurrency] = useState<Currency>(() => {
+    if (typeof window === 'undefined') return 'usd';
+    const stored = localStorage.getItem('kc-currency') as Currency | null;
+    return stored && CURRENCIES.some(c => c.key === stored) ? stored : 'usd';
+  });
+  const setPersisted = useCallback((c: Currency) => {
+    setCurrency(c);
+    localStorage.setItem('kc-currency', c);
+  }, []);
+  return [currency, setPersisted];
+};
+
 // ── Format helpers ──────────────────────────────────────────────────────
 const formatAddr = (a: string) => a.slice(0, 6) + '…' + a.slice(-4);
 
@@ -71,8 +98,23 @@ const fmtCompact = (n: number) => {
   return fmt(n, 2);
 };
 
-const fmtUsd = (n: number) =>
-  n.toLocaleString(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtCurrency = (n: number, currency: Currency, prices: PriceMap | null) => {
+  // n is in USD; convert to target currency using ETH as FX anchor
+  const usdPerEth = prices?.['ethereum']?.usd ?? 1;
+  const targetPerEth = prices?.['ethereum']?.[currency] ?? (currency === 'usd' ? 1 : 0);
+  const fx = targetPerEth / usdPerEth;
+  const converted = n * fx;
+  const localeMap: Record<Currency, string> = {
+    usd: 'en-US', eur: 'de-DE', idr: 'id-ID', jpy: 'ja-JP', gbp: 'en-GB'
+  };
+  const digits = currency === 'jpy' || currency === 'idr' ? 0 : 2;
+  return new Intl.NumberFormat(localeMap[currency] ?? 'en-US', {
+    style: 'currency',
+    currency: currency.toUpperCase(),
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  }).format(converted);
+};
 
 function copyText(text: string): Promise<void> {
   if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
@@ -119,11 +161,13 @@ export default function WalletChecker() {
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const [settingsOpen, setSettingsOpen]   = useState(false);
   const [theme, setTheme]              = usePersistedTheme();
+  const [currency, setCurrency]        = usePersistedCurrency();
   const [autoRefresh, setAutoRefresh]  = useState(false);
   const [refreshInterval, setRefreshInterval] = useState(30);
   const [customTokenInput, setCustomTokenInput] = useState('');
   const [copiedAddr, setCopiedAddr]    = useState<string | null>(null);
   const [openCategories, setOpenCategories] = useState<Set<string>>(new Set());
+  const [prices, setPrices]            = useState<PriceMap | null>(null);
   const reduceMotion = useReducedMotion();
 
   const fetchWallets = useCallback(async () => {
@@ -134,6 +178,7 @@ export default function WalletChecker() {
       if (!res.ok) throw new Error('Failed to fetch wallets');
       const data: ApiResponse = await res.json();
       setWallets(data.wallets);
+      setPrices(data.prices);
       setLastRefreshed(new Date());
     } catch (err: any) {
       setError(err.message || 'Something went wrong');
@@ -230,11 +275,18 @@ export default function WalletChecker() {
   const solanaWallets   = wallets.filter(w => w.chain === 'solana');
   const ethereumWallets = wallets.filter(w => w.chain === 'ethereum');
 
-  const totalUsd  = wallets.reduce((s, w) => s + w.nativeBalanceUsd + w.tokens.reduce((t, x) => t + x.valueUsd, 0), 0);
+  // Use the selected currency for all value displays
+  const formatValue = (usdValue: number) => fmtCurrency(usdValue, currency, prices);
+
+  const totalValue  = wallets.reduce((s, w) => s + w.nativeBalanceUsd + w.tokens.reduce((t, x) => t + x.valueUsd, 0), 0);
   const totalSol  = solanaWallets.reduce((s, w) => s + w.nativeBalance, 0);
   const totalEth  = ethereumWallets.reduce((s, w) => s + w.nativeBalance, 0);
-  const totalSolUsd = solanaWallets.reduce((s, w) => s + w.nativeBalanceUsd, 0);
-  const totalEthUsd = ethereumWallets.reduce((s, w) => s + w.nativeBalanceUsd, 0);
+  const totalSolValue = solanaWallets.reduce((s, w) => s + w.nativeBalanceUsd, 0);
+  const totalEthValue = ethereumWallets.reduce((s, w) => s + w.nativeBalanceUsd, 0);
+  // Stablecoin totals (all chains)
+  const totalStableValue = wallets.reduce((s, w) => s + w.tokens.filter(t => /USDC|USDT|USDE|USDG|BUSD|USDP|FRAX/i.test(t.symbol)).reduce((t, x) => t + x.valueUsd, 0), 0);
+  const solStableValue = solanaWallets.reduce((s, w) => s + w.tokens.filter(t => /USDC|USDT|USDE|USDG|BUSD|USDP|FRAX/i.test(t.symbol)).reduce((t, x) => t + x.valueUsd, 0), 0);
+  const ethStableValue = ethereumWallets.reduce((s, w) => s + w.tokens.filter(t => /USDC|USDT|USDE|USDG|BUSD|USDP|FRAX/i.test(t.symbol)).reduce((t, x) => t + x.valueUsd, 0), 0);
 
   // Group by category
   const groupedWallets = (chain: 'solana' | 'ethereum') => {
@@ -255,6 +307,8 @@ export default function WalletChecker() {
   // ── Wallet card (slim) ────────────────────────────────────
   function SlimWalletCard({ w, chain, idx }: { w: Wallet; chain: 'solana' | 'ethereum'; idx: number }) {
     const hasTokens = w.tokens.length > 0;
+    const nativeSymbol = chain === 'solana' ? 'SOL' : 'ETH';
+    const nativeDecimals = chain === 'solana' ? 4 : 6;
 
     return (
       <motion.div
@@ -298,14 +352,14 @@ export default function WalletChecker() {
             {chain === 'solana' ? 'Native (SOL)' : 'Native (ETH)'}
           </div>
           <div className={styles.balanceValue}>
-            {w.nativeBalance != null ? fmt(w.nativeBalance, chain === 'solana' ? 4 : 6) : '—'}
+            {w.nativeBalance != null ? fmt(w.nativeBalance, nativeDecimals) : '—'}
             <span style={{ fontSize: '0.625rem', fontWeight: 400, color: 'var(--text-3)', marginLeft: 2 }}>
-              {chain === 'solana' ? 'SOL' : 'ETH'}
+              {nativeSymbol}
             </span>
           </div>
           <div className={styles.balanceRight}>
             <span className={`${styles.usdValue} ${w.nativeBalanceUsd > 0 ? styles.positive : ''}`}>
-              {w.nativeBalanceUsd != null ? fmtUsd(w.nativeBalanceUsd) : '—'}
+              {w.nativeBalanceUsd != null ? formatValue(w.nativeBalanceUsd) : '—'}
             </span>
           </div>
         </div>
@@ -322,7 +376,7 @@ export default function WalletChecker() {
                   {fmt(t.balance, t.decimals)}
                 </span>
                 <span className={styles.tokenChipUsd}>
-                  {fmtUsd(t.valueUsd)}
+                  {t.valueUsd > 0 ? formatValue(t.valueUsd) : ''}
                 </span>
                 {t.source === 'user' && (
                   <span className={styles.tokenChipCustom}>custom</span>
@@ -369,7 +423,7 @@ export default function WalletChecker() {
             <span className={styles.categoryCount}>{catWallets.length}</span>
             {totalChainBal > 0 && (
               <span className={styles.usdValue} style={{ fontSize: '0.625rem', marginLeft: 4 }}>
-                {fmtUsd(totalChainBal)}
+                {formatValue(totalChainBal)}
               </span>
             )}
           </div>
@@ -513,9 +567,9 @@ export default function WalletChecker() {
               <div className={`${styles.bentoCell} ${styles.total}`}>
                 <div className={styles.bentoLabel}>Total Portfolio</div>
                 <div className={styles.bentoValue}>
-                  {fmtUsd(totalUsd)}
+                  {formatValue(totalValue)}
                 </div>
-                {totalUsd > 0 && (
+                {totalValue > 0 && (
                   <div className={styles.bentoChainRow}>
                     <Coins size={11} />
                     <span className={styles.bentoSub}>
@@ -539,9 +593,9 @@ export default function WalletChecker() {
                   <span className={styles.chainCount}>
                     {solanaWallets.length} wallet{solanaWallets.length !== 1 ? 's' : ''}
                   </span>
-                  {totalSolUsd > 0 && (
+                  {totalSolValue > 0 && (
                     <span className={styles.usdValue} style={{ marginLeft: 4 }}>
-                      {fmtUsd(totalSolUsd)}
+                      {formatValue(totalSolValue)}
                     </span>
                   )}
                 </div>
@@ -561,11 +615,25 @@ export default function WalletChecker() {
                   <span className={styles.chainCount}>
                     {ethereumWallets.length} wallet{ethereumWallets.length !== 1 ? 's' : ''}
                   </span>
-                  {totalEthUsd > 0 && (
+                  {totalEthValue > 0 && (
                     <span className={styles.usdValue} style={{ marginLeft: 4 }}>
-                      {fmtUsd(totalEthUsd)}
+                      {formatValue(totalEthValue)}
                     </span>
                   )}
+                </div>
+              </div>
+
+              {/* Stablecoins cell — green tint */}
+              <div className={`${styles.bentoCell} ${styles['chain-stable-anvil']}`}>
+                <div className={styles.bentoLabel}>Stablecoins</div>
+                <div className={styles.bentoValue} style={{ fontSize: '1.35rem' }}>
+                  {formatValue(totalStableValue)}
+                </div>
+                <div className={styles.bentoChainRow}>
+                  <span className={styles.chainDot} style={{ background: '#4ade80' }} />
+                  <span className={styles.chainCount}>
+                    SOL: {formatValue(solStableValue)} | ETH: {formatValue(ethStableValue)}
+                  </span>
                 </div>
               </div>
             </div>
@@ -680,6 +748,23 @@ export default function WalletChecker() {
                       className={`${styles.themeOption} ${theme === key ? styles.active : ''}`}
                       onClick={() => setTheme(key)}
                       data-slot="theme-option"
+                    >
+                      <Icon size={14} className={styles.themeOptionIcon} />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className={styles.settingSection}>
+                <span className={styles.settingLabel}>Currency</span>
+                <div className={styles.themeGrid}>
+                  {CURRENCIES.map(({ key, label, symbol, icon: Icon }) => (
+                    <button
+                      key={key}
+                      className={`${styles.themeOption} ${currency === key ? styles.active : ''}`}
+                      onClick={() => setCurrency(key)}
+                      data-slot="currency-option"
                     >
                       <Icon size={14} className={styles.themeOptionIcon} />
                       {label}

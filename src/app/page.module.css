@@ -157,10 +157,10 @@
   transform: translateY(0) scale(0.985);
 }
 
-/* ── Portfolio bento (asymmetric: 1.6fr 1fr 1fr) ────────────── */
+/* ── Portfolio bento (asymmetric: 1.3fr 1fr 1fr 1fr) ────────────── */
 .portfolioBento {
   display: grid;
-  grid-template-columns: 1.6fr 1fr 1fr;
+  grid-template-columns: 1.3fr 1fr 1fr 1fr;
   gap: 10px;
   padding: 18px;
   background: var(--bg-1);
@@ -221,6 +221,10 @@
 
 .bentoCell.chain-eth-anvil {
   background-image: radial-gradient(ellipse at 70% 0%, rgba(98, 126, 234, 0.035) 0%, transparent 60%);
+}
+
+.bentoCell.chain-stable-anvil {
+  background-image: radial-gradient(ellipse at 50% 0%, rgba(74, 222, 128, 0.035) 0%, transparent 60%);
 }
 
 .bentoCell:hover {
