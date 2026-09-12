@@ -360,6 +360,45 @@
   white-space: nowrap;
 }
 
+/* Allocation donut legend */
+.allocationLegend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.allocationLegend .legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.575rem;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+}
+
+.legendDot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.donutTotal {
+  font-size: 0.45rem;
+  fill: var(--text-3);
+  font-family: var(--font-mono);
+  font-weight: 500;
+}
+
+.allocationDonut {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
 /* Chain dots — solid fill, NO glow */
 .chainDot {
   width: 5px;
@@ -387,6 +426,89 @@
 
 .usdValue.positive {
   color: var(--accent);
+}
+
+/* PnL badge */
+.pnlBadge {
+  font-family: var(--font-mono);
+  font-size: 0.575rem;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+  margin-left: 4px;
+}
+
+.pnlPositive { background: rgba(74, 222, 128, 0.12); color: #4ade80; }
+.pnlNegative { background: rgba(248, 113, 113, 0.12); color: #f87171; }
+
+/* NFT badge */
+.nftBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.575rem;
+  font-weight: 600;
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 1px 5px;
+  margin-top: 3px;
+}
+
+.nftBadgeDot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #a78bfa;
+}
+
+/* Nickname editing */
+.nicknameInput {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-0);
+  color: var(--text-1);
+  outline: none;
+  width: 120px;
+}
+
+.nicknameInput:focus {
+  border-color: var(--accent);
+}
+
+.editNicknameBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  color: var(--text-3);
+  cursor: pointer;
+  transition: all var(--motion-fast) var(--motion-ease);
+  flex-shrink: 0;
+}
+
+.editNicknameBtn:hover {
+  background: var(--bg-1);
+  color: var(--text-1);
+  border-color: var(--border-hover);
+}
+
+/* Wallet address inner (row for nickname + edit) */
+.walletAddressInner {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: nowrap;
 }
 
 /* ── Sections ────────────────────────────────────────────────── */

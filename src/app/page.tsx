@@ -15,6 +15,7 @@ import {
   ChevronDown,
   Plus,
   Globe,
+  Pencil,
 } from 'lucide-react';
 import styles from './page.module.css';
 
@@ -34,7 +35,9 @@ interface Wallet {
   chain: 'solana' | 'ethereum';
   nativeBalance: number;
   nativeBalanceUsd: number;
+  nativeUsd24hAgo?: number;
   tokens: TokenHolding[];
+  nftCount?: number;
   explorerUrl: string;
   category?: string;
 }
@@ -86,6 +89,87 @@ const usePersistedCurrency = (): [Currency, (c: Currency) => void] => {
   }, []);
   return [currency, setPersisted];
 };
+
+const usePersistedNicknames = (): Record<string, string> => {
+  const [nicknames, setNicknames] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const stored = localStorage.getItem('kc-nicknames');
+    if (stored) {
+      try { setNicknames(JSON.parse(stored)); } catch {}
+    }
+  }, []);
+  const save = useCallback((map: Record<string, string>) => {
+    setNicknames(map);
+    localStorage.setItem('kc-nicknames', JSON.stringify(map));
+  }, []);
+  // expose save for the component to use
+  (usePersistedNicknames as any).save = save;
+  return nicknames;
+};
+
+const formatNickname = (addr: string, nicknames: Record<string, string>): { label: string; isNick: boolean } => {
+  const nick = nicknames[addr.toLowerCase()];
+  if (nick) return { label: nick, isNick: true };
+  return { label: formatAddr(addr), isNick: false };
+};
+
+// ── Allocation donut (SVG pie chart) ──────────────────────────────
+function AllocationDonut({ allocations, totalValue }: {
+  allocations: Array<{ label: string; value: number; color: string }>;
+  totalValue: number;
+}) {
+  const total = allocations.reduce((s, a) => s + a.value, 0);
+  if (total === 0) {
+    return <span style={{ fontSize: '0.625rem', color: 'var(--text-3)' }}>No allocation data</span>;
+  }
+
+  let offset = 0;
+  const radius = 16;
+  const strokeWidth = 6;
+  const circumference = 2 * Math.PI * radius;
+
+  const segments = allocations.map(a => {
+    const fraction = a.value / total;
+    const dashOffset = offset * circumference;
+    offset += fraction;
+    return { ...a, fraction, dashOffset, dashArray: fraction * circumference };
+  });
+
+  return (
+    <div className={styles.allocationDonut}>
+      <svg width="80" height="44" viewBox="0 0 90 50">
+        <defs>
+          <filter id="soft" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="0.5" />
+          </filter>
+        </defs>
+        {segments.map((s, i) => (
+          <circle
+            key={i}
+            cx="30" cy="25"
+            r={radius}
+            fill="none"
+            stroke={s.color}
+            strokeWidth={strokeWidth}
+            strokeDasharray={s.dashArray}
+            strokeDashoffset={circumference - s.dashOffset}
+            style={{ filter: 'url(#soft)', transition: 'stroke-dashoffset 0.3s' }}
+            transform="rotate(-90 30 25)"
+          />
+        ))}
+      </svg>
+      <div className={styles.allocationLegend}>
+        {allocations.filter(a => a.value > 0).map((a, i) => (
+          <span key={i} className={styles.legendItem}>
+            <span className={styles.legendDot} style={{ background: a.color }} />
+            <span>{a.label} {(a.value / total * 100).toFixed(0)}%</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 // ── Format helpers ──────────────────────────────────────────────────────
 const formatAddr = (a: string) => a.slice(0, 6) + '…' + a.slice(-4);
@@ -220,6 +304,9 @@ export default function WalletChecker() {
   const [openCategories, setOpenCategories] = useState<Set<string>>(new Set());
   const [prices, setPrices]            = useState<PriceMap | null>(null);
   const [sparklines, setSparklines]     = useState<Record<string, number[]> | null>(null);
+  const nicknames = usePersistedNicknames();
+  const [editingNickname, setEditingNickname] = useState<string | null>(null);
+  const [nicknameDraft, setNicknameDraft] = useState('');
   const reduceMotion = useReducedMotion();
 
   const fetchWallets = useCallback(async () => {
@@ -340,6 +427,15 @@ export default function WalletChecker() {
   const totalStableValue = wallets.reduce((s, w) => s + w.tokens.filter(t => /USDC|USDT|USDE|USDG|BUSD|USDP|FRAX/i.test(t.symbol)).reduce((t, x) => t + x.valueUsd, 0), 0);
   const solStableValue = solanaWallets.reduce((s, w) => s + w.tokens.filter(t => /USDC|USDT|USDE|USDG|BUSD|USDP|FRAX/i.test(t.symbol)).reduce((t, x) => t + x.valueUsd, 0), 0);
   const ethStableValue = ethereumWallets.reduce((s, w) => s + w.tokens.filter(t => /USDC|USDT|USDE|USDG|BUSD|USDP|FRAX/i.test(t.symbol)).reduce((t, x) => t + x.valueUsd, 0), 0);
+  const totalTokenValue = wallets.reduce((s, w) => s + w.tokens.filter(t => !/USDC|USDT|USDE|USDG|BUSD|USDP|FRAX/i.test(t.symbol)).reduce((t, x) => t + x.valueUsd, 0), 0);
+
+  // Allocation breakdown for donut
+  const allocationData = [
+    { label: 'SOL', value: totalSolValue, color: '#9945ff' },
+    { label: 'ETH', value: totalEthValue, color: '#627eeb' },
+    { label: 'Stablecoins', value: totalStableValue, color: '#4ade80' },
+    { label: 'Tokens', value: totalTokenValue, color: 'var(--accent)' },
+  ];
 
   // Group by category
   const groupedWallets = (chain: 'solana' | 'ethereum') => {
@@ -362,6 +458,32 @@ export default function WalletChecker() {
     const hasTokens = w.tokens.length > 0;
     const nativeSymbol = chain === 'solana' ? 'SOL' : 'ETH';
     const nativeDecimals = chain === 'solana' ? 4 : 6;
+    const nickData = formatNickname(w.address, nicknames);
+    const pnl24h = w.nativeUsd24hAgo != null
+      ? w.nativeBalanceUsd - w.nativeUsd24hAgo
+      : null;
+    const pnlPercent = w.nativeUsd24hAgo && w.nativeUsd24hAgo > 0
+      ? ((w.nativeBalanceUsd - w.nativeUsd24hAgo) / w.nativeUsd24hAgo) * 100
+      : null;
+    const isPositive = pnl24h != null && pnl24h >= 0;
+
+    const saveNickname = (addr: string, nick: string) => {
+      const map = { ...nicknames, [addr.toLowerCase()]: nick };
+      (usePersistedNicknames as any).save(map);
+    };
+
+    const startEditNickname = (addr: string) => {
+      setEditingNickname(addr);
+      setNicknameDraft(nicknames[addr.toLowerCase()] || '');
+    };
+
+    const confirmNickname = () => {
+      if (editingNickname && nicknameDraft.trim()) {
+        saveNickname(editingNickname, nicknameDraft.trim());
+      }
+      setEditingNickname(null);
+      setNicknameDraft('');
+    };
 
     return (
       <motion.div
@@ -374,15 +496,40 @@ export default function WalletChecker() {
       >
         <div className={styles.walletAddress}>
           <div className={styles.walletAddressInner}>
-            <button
-              data-slot="address-text"
-              className={styles.addressText}
-              onClick={() => handleCopy(w.address)}
-              aria-label={`Copy ${w.address}`}
-              title="Click to copy address"
-            >
-              {formatAddr(w.address)}
-            </button>
+            {editingNickname === w.address ? (
+              <input
+                data-slot="nickname-input"
+                className={styles.nicknameInput}
+                value={nicknameDraft}
+                onChange={e => setNicknameDraft(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') confirmNickname(); if (e.key === 'Escape') { setEditingNickname(null); setNicknameDraft(''); } }}
+                onBlur={confirmNickname}
+                placeholder="Wallet name..."
+                autoFocus
+                aria-label="Edit wallet nickname"
+              />
+            ) : (
+              <button
+                data-slot="address-text"
+                className={styles.addressText}
+                onClick={() => handleCopy(w.address)}
+                aria-label={`Copy ${w.address}`}
+                title="Click to copy address"
+              >
+                {nickData.isNick ? nickData.label : formatAddr(w.address)}
+              </button>
+            )}
+            {nickData.isNick && editingNickname !== w.address && (
+              <button
+                data-slot="edit-nickname"
+                className={styles.editNicknameBtn}
+                onClick={() => startEditNickname(w.address)}
+                title="Edit nickname"
+                aria-label="Edit nickname"
+              >
+                <Pencil size={9} />
+              </button>
+            )}
             <span className={`${styles.copyBadge} ${copiedAddr === w.address ? styles.show : ''}`}>
               <Check size={9} /> Copied
             </span>
@@ -414,8 +561,20 @@ export default function WalletChecker() {
             <span className={`${styles.usdValue} ${w.nativeBalanceUsd > 0 ? styles.positive : ''}`}>
               {w.nativeBalanceUsd != null ? formatValue(w.nativeBalanceUsd) : '—'}
             </span>
+            {pnlPercent != null && (
+              <span className={`${styles.pnlBadge} ${isPositive ? styles.pnlPositive : styles.pnlNegative}`}>
+                {isPositive ? '+' : ''}{pnlPercent.toFixed(2)}%
+              </span>
+            )}
           </div>
         </div>
+
+        {w.nftCount != null && w.nftCount > 0 && (
+          <div className={styles.nftBadge}>
+            <span className={styles.nftBadgeDot} />
+            {w.nftCount} NFT{w.nftCount !== 1 ? 's' : ''}
+          </div>
+        )}
 
         {hasTokens && (
           <div className={styles.tokensInline}>
@@ -705,6 +864,9 @@ export default function WalletChecker() {
                       {fmtCompact(totalSol)} SOL + {fmtCompact(totalEth)} ETH
                     </span>
                   </div>
+                )}
+                {totalValue > 0 && (
+                  <AllocationDonut allocations={allocationData} totalValue={totalValue} />
                 )}
               </div>
 

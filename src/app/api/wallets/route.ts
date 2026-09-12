@@ -352,13 +352,25 @@ export async function GET(req: NextRequest) {
           source: 'user' as const,
         }));
 
+      // Count NFTs from token accounts (amount=1, decimals=0, not a known stablecoin)
+      const nftCount = tokenAccs.filter(t => {
+        const balance = Number(t.amount);
+        const isStablecoin = Object.keys(SOL_STABLECOINS).includes(t.mint);
+        return balance === 1 && (t.decimals === 0) && !isStablecoin;
+      }).length;
+
+      const nativeUsd = nativeBal * (prices.solana?.usd ?? 0);
+      const solChange = sparklines?.solana ? (sparklines.solana[sparklines.solana.length - 1] - sparklines.solana[0]) / sparklines.solana[0] : 0;
+
       return {
         address: w.address,
         chain: 'solana' as const,
         category: w.category,
         nativeBalance: nativeBal,
-        nativeBalanceUsd: nativeBal * (prices.solana?.usd ?? 0),
+        nativeBalanceUsd: nativeUsd,
+        nativeUsd24hAgo: nativeBal * (prices.solana?.usd ?? 0) / (1 + solChange || 1),
         tokens: [...Object.values(knownTokens), ...memTokens],
+        nftCount,
         explorerUrl: explorerUrl(w.address, 'solana'),
       };
     });
@@ -396,13 +408,18 @@ export async function GET(req: NextRequest) {
           source: 'user' as const,
         }));
 
+      const nativeUsd = nativeBal * (prices.ethereum?.usd ?? 0);
+      const ethChange = sparklines?.ethereum ? (sparklines.ethereum[sparklines.ethereum.length - 1] - sparklines.ethereum[0]) / sparklines.ethereum[0] : 0;
+
       return {
         address: w.address,
         chain: 'ethereum' as const,
         category: w.category,
         nativeBalance: nativeBal,
-        nativeBalanceUsd: nativeBal * (prices.ethereum?.usd ?? 0),
+        nativeBalanceUsd: nativeUsd,
+        nativeUsd24hAgo: nativeBal * (prices.ethereum?.usd ?? 0) / (1 + ethChange || 1),
         tokens: [...onchainTokens, ...memTokens],
+        nftCount: 0, // ETH NFT count requires Alchemy/Moralis API — placeholder
         explorerUrl: explorerUrl(w.address, 'ethereum'),
       };
     });
