@@ -1,391 +1,212 @@
 /* ============================================================
-   KartelKoin Wallet Checker - Design Tokens & Global Styles
+   KartelKoin Wallet Checker — Global Styles
+   OpenSourceUI aesthetic: quiet neutral stage, hairline borders,
+   accents only where state needs them, no glow for its own sake.
    ============================================================ */
 
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+/* ── Font faces ────────────────────────────────────────────── */
+@font-face {
+  font-family: 'Geist';
+  src: url('/fonts/Geist-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
 }
 
-/* ── Design tokens ─────────────────────────────────────────── */
+@font-face {
+  font-family: 'Geist';
+  src: url('/fonts/Geist-SemiBold.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
 
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/JetBrainsMono-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/JetBrainsMono-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ── Design tokens (single source) ─────────────────────────── */
 :root {
-  /* Background layers (dark KartelKoin default) */
-  --bg-0: #0a0a0a;
-  --bg-1: #111111;
-  --bg-2: #161616;
-  --border-soft: rgba(255, 255, 255, 0.08);
-  --border: rgba(255, 255, 255, 0.12);
+  /* Background layers (dark KartelKoin — adapted from quiet neutral stage) */
+  --bg-0: #050505;
+  --bg-1: #0a0a0a;
+  --bg-2: #111111;
 
-  /* Text hierarchy */
+  /* Hairline borders — subtle, never decorative */
+  --border: rgba(255, 255, 255, 0.08);
+  --border-hover: rgba(255, 255, 255, 0.14);
+  --border-soft: rgba(255, 255, 255, 0.05);
+
+  /* Text hierarchy — ink on dark, like paper white on light */
   --text-1: #f5f5f5;
-  --text-2: rgba(245, 245, 245, 0.75);
+  --text-2: rgba(245, 245, 245, 0.70);
   --text-3: rgba(245, 245, 245, 0.45);
-  --text-muted: rgba(245, 245, 245, 0.32);
 
-  /* Accent: warm gold that works in dark */
+  /* Single accent — amber, only where state needs attention */
   --accent: #f5a623;
-  --accent-dim: rgba(245, 166, 35, 0.80);
-  --accent-soft: rgba(245, 166, 35, 0.10);
-  --accent-glow: rgba(245, 166, 35, 0.18);
+  --accent-emphasis: #f5a623;
 
-  /* State colors */
-  --live: #4ade80;
-  --live-dim: rgba(74, 222, 128, 0.55);
-  --status-offline: rgba(245, 245, 245, 0.25);
+  /* State colors (semantic, not decorative) */
+  --live-green: #4ade80;
+  --live-green-dim: rgba(74, 222, 128, 0.50);
   --error: #ef4444;
-  --error-soft: rgba(239, 68, 68, 0.12);
-  --success: #4ade80;
+  --error-soft: rgba(239, 68, 68, 0.10);
 
-  /* Radii - ONE system */
-  --radius-sm: 8px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --radius-xl: 18px;
+  /* Radii — ONE system */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
   --radius-pill: 999px;
 
-  /* Fonts */
-  --font-geist: var(--font-geist), -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono: var(--font-jetbrains), 'SF Mono', 'Fira Code', monospace;
+  /* Fonts (CSS vars from layout.tsx) */
+  --font-sans: var(--font-geist), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: var(--font-jetbrains), 'SF Mono', 'Fira Code', Menlo, monospace;
+
+  /* Shadows — layered hairline + float, never single glow */
+  --shadow-card-rest: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-card-hover: 0 0 0 1px rgba(0, 0, 0, 0.08), 0 4px 10px rgba(0, 0, 0, 0.06);
+  --shadow-panel-rest: 0 0 0 1px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.06);
+  --shadow-panel-hover: 0 0 0 1px rgba(0, 0, 0, 0.10), 0 6px 16px rgba(0, 0, 0, 0.08);
 }
 
-html {
-  scroll-behavior: smooth;
-}
-
+/* ── Reset & base ────────────────────────────────────────────── */
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
+html {
+  scroll-behavior: smooth;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@media (max-width: 780px) {
+  html { font-size: 14px; }
+}
+
 body {
   background: var(--bg-0);
   color: var(--text-1);
-  font-family: var(--font-geist), -apple-system, BlinkMacSystemFont, sans-serif;
-  font-size: 14px;
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
   line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
   min-height: 100dvh;
 }
 
-/* ── Selection, scrollbar, focus ─────────────────────────── */
-
+/* ── Selection ─────────────────────────────────────────────── */
 ::selection {
-  background: var(--accent-soft);
+  background: rgba(245, 166, 35, 0.15);
   color: var(--text-1);
 }
 
+/* ── Scrollbar (hairline, never decorative) ─────────────────── */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
+::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: rgba(110, 110, 120, 0.35);
+  background: rgba(110, 110, 120, 0.30);
   border-radius: 9999px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(110, 110, 120, 0.55);
+  background: rgba(110, 110, 120, 0.50);
 }
 
-a[href^="#"] {
-  scroll-margin-top: 80px;
-}
-
+/* ── Focus: border change, not colored ring ────────────────── */
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--text-1);
   outline-offset: 2px;
   border-radius: 4px;
 }
 
-/* ── Theme overrides (applied via [data-theme] on container) ──
-   Glass theme: frosted panels with subtle inner light
-   Neon theme: amber glow accents, deeper shadow play
-   KartelKoin (default): flat dark with warm accent
-   ─────────────────────────────────────────────────────────── */
+/* ── Reduced motion: disable all transitions ───────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
 
-/* Glass theme */
+/* ── Scroll anchor ──────────────────────────────────────────── */
+a[href^="#"] { scroll-margin-top: 80px; }
+
+/* ── Theme overrides ─────────────────────────────────────────
+   Obsidian (default): flat dark, zero glow
+   Glass: subtle frosted panels with inner light (NOT outer glow)
+   Neon: amber-tinted borders, no outer-glow cosplay
+   All themes share: one accent (amber), one radii, same motion-ease.
+   ──────────────────────────────────────────────────────────── */
+
+/* Glass theme — frosted panels, inner light only */
+[data-theme="glass"] {
+  --bg-0: #050505;
+  --bg-1: rgba(255, 255, 255, 0.04);
+  --bg-2: rgba(255, 255, 255, 0.07);
+}
+
 [data-theme="glass"] .container {
-  background: rgba(255, 255, 255, 0.03);
-}
-
-[data-theme="glass"] .header {
-  background: rgba(255, 255, 255, 0.08);
-  border-bottom-color: rgba(255, 255, 255, 0.15);
-}
-
-[data-theme="glass"] .walletCard {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.18);
-}
-
-[data-theme="glass"] .walletCard:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.28);
-}
-
-[data-theme="glass"] .bentoCell {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.02);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
 
-[data-theme="glass"] .bentoCell:hover {
-  border-color: rgba(255, 255, 255, 0.25);
-  background: rgba(255, 255, 255, 0.10);
-}
-
-[data-theme="glass"] .btnSecondary {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.15);
-  color: rgba(255, 255, 255, 0.7);
-}
-
-[data-theme="glass"] .btnSecondary:hover {
-  background: rgba(255, 255, 255, 0.10);
-  border-color: rgba(255, 255, 255, 0.25);
-  color: #fff;
-}
-
-[data-theme="glass"] .tokenRow {
-  background: rgba(255, 255, 255, 0.03);
-  border-color: rgba(255, 255, 255, 0.10);
-}
-
-[data-theme="glass"] .tokenRow:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.20);
-}
-
-[data-theme="glass"] .addressText {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.85);
-}
-
-[data-theme="glass"] .addressText:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-[data-theme="glass"] .explorerBtn {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.65);
-}
-
-[data-theme="glass"] .explorerBtn:hover {
-  background: rgba(245, 166, 35, 0.15);
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-[data-theme="glass"] .categoryHeader {
+[data-theme="glass"] .header {
   background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.10);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
 }
 
-[data-theme="glass"] .categoryCard {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.12);
-}
-
-[data-theme="glass"] .statusBar {
+[data-theme="glass"] .panel {
   background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 
-[data-theme="glass"] .emptyState {
-  border-color: rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.03);
-}
-
-[data-theme="glass"] .emptyState:hover {
-  border-color: rgba(255, 255, 255, 0.20);
-  background: rgba(255, 255, 255, 0.06);
-}
-
-[data-theme="glass"] .pulse-dot {
-  box-shadow: 0 0 8px rgba(74, 222, 128, 0.4);
-}
-
-[data-theme="glass"] .selectSelect {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.8);
-  appearance: none;
-  -webkit-appearance: none;
-}
-
-/* Neon theme */
-[data-theme="neon"] .container {
-  background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(245, 166, 35, 0.05) 0%, transparent 70%);
-}
-
-[data-theme="neon"] .header {
-  border-bottom-color: rgba(245, 166, 35, 0.15);
-  box-shadow: 0 0 30px rgba(245, 166, 35, 0.03);
-}
-
-[data-theme="neon"] .walletCard {
-  background: rgba(245, 166, 35, 0.03);
-  border-color: rgba(245, 166, 35, 0.12);
-}
-
-[data-theme="neon"] .walletCard:hover {
-  border-color: rgba(245, 166, 35, 0.22);
-  box-shadow: 0 0 20px rgba(245, 166, 35, 0.06), inset 0 0 20px rgba(245, 166, 35, 0.03);
+/* Neon theme — amber-tinted borders only, NO outer glow cosplay */
+[data-theme="neon"] {
+  --border: rgba(245, 166, 35, 0.16);
+  --border-hover: rgba(245, 166, 35, 0.28);
+  --border-soft: rgba(245, 166, 35, 0.08);
 }
 
 [data-theme="neon"] .bentoCell {
-  border-color: rgba(245, 166, 35, 0.15);
-  background: rgba(245, 166, 35, 0.02);
+  box-shadow: inset 0 1px 0 rgba(245, 166, 35, 0.04);
 }
 
-[data-theme="neon"] .bentoCell:hover {
-  border-color: rgba(245, 166, 35, 0.28);
-  box-shadow: 0 0 24px rgba(245, 166, 35, 0.08);
-}
-
-[data-theme="neon"] .btnSecondary {
-  background: rgba(245, 166, 35, 0.04);
-  border-color: rgba(245, 166, 35, 0.15);
-  color: rgba(245, 166, 35, 0.7);
-}
-
-[data-theme="neon"] .btnSecondary:hover {
-  background: rgba(245, 166, 35, 0.10);
-  border-color: var(--accent);
+[data-theme="neon"] .sectionTitle h2 {
   color: var(--accent);
 }
 
-[data-theme="neon"] .tokenRow {
-  border-color: rgba(245, 166, 35, 0.10);
+/* ── Motion timing (shared across themes) ────────────────────
+   cubic-bezier(0.32, 0.72, 0, 1) — the OSUI easing curve
+   ────────────────────────────────────────────────────────── */
+:root {
+  --motion-ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --motion-fast: 150ms;
+  --motion-base: 250ms;
+  --motion-slow: 400ms;
 }
 
-[data-theme="neon"] .tokenRow:hover {
-  border-color: rgba(245, 166, 35, 0.20);
-  background: rgba(245, 166, 35, 0.04);
-}
-
-[data-theme="neon"] .addressText {
-  border-color: rgba(245, 166, 35, 0.18);
-  color: rgba(245, 166, 35, 0.7);
-}
-
-[data-theme="neon"] .addressText:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-  box-shadow: 0 0 12px rgba(245, 166, 35, 0.15);
-}
-
-[data-theme="neon"] .explorerBtn {
-  border-color: rgba(245, 166, 35, 0.15);
-  color: rgba(245, 166, 35, 0.8);
-}
-
-[data-theme="neon"] .explorerBtn:hover {
-  background: rgba(245, 166, 35, 0.15);
-  border-color: var(--accent);
-  color: var(--accent);
-  box-shadow: 0 0 12px rgba(245, 166, 35, 0.20);
-}
-
-[data-theme="neon"] .section h2 {
-  text-shadow: 0 0 15px rgba(98, 126, 234, 0.3);
-}
-
-[data-theme="neon"] .errorState {
-  border-color: rgba(239, 68, 68, 0.30);
-  background: rgba(239, 68, 68, 0.05);
-  box-shadow: 0 0 20px rgba(239, 68, 68, 0.05);
-}
-
-[data-theme="neon"] .categoryHeader {
-  border-color: rgba(245, 166, 35, 0.15);
-}
-
-[data-theme="neon"] .categoryCard {
-  border-color: rgba(245, 166, 35, 0.12);
-}
-
-[data-theme="neon"] .categoryCard:hover {
-  border-color: rgba(245, 166, 35, 0.22);
-  box-shadow: 0 0 16px rgba(245, 166, 35, 0.06);
-}
-
-[data-theme="neon"] .categoryBadge {
-  color: var(--accent);
-  border-color: rgba(245, 166, 35, 0.15);
-}
-
-[data-theme="neon"] .statusBar {
-  border-color: rgba(245, 166, 35, 0.12);
-}
-
-[data-theme="neon"] .emptyState {
-  border-color: rgba(245, 166, 35, 0.10);
-}
-
-[data-theme="neon"] .emptyState:hover {
-  border-color: rgba(245, 166, 35, 0.22);
-  background: rgba(245, 166, 35, 0.02);
-}
-
-[data-theme="neon"] .pulse-dot {
-  box-shadow: 0 0 8px rgba(74, 222, 128, 0.4);
-}
-
-[data-theme="neon"] .selectSelect {
-  border-color: rgba(245, 166, 35, 0.15);
-  color: rgba(245, 166, 35, 0.7);
-}
-
-/* ── Responsive ───────────────────────────────────────────────── */
-
-@media (max-width: 780px) {
-  .container {
-    padding: 0 16px 60px;
-  }
-
-  .header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
-  }
-
-  .headerActions {
-    width: 100%;
-    justify-content: flex-start;
-  }
-
-  .portfolioBento {
-    grid-template-columns: 1fr;
-    padding: 20px 16px;
-  }
-
-  .portfolioBento .bentoCell:first-child {
-    grid-column: auto;
-  }
-
-  .bentoValue {
-    font-size: 1.5rem;
-  }
-
-  .settingsPanel {
-    padding: 20px 18px;
-    max-width: 100%;
-    max-height: calc(100dvh - 32px);
-  }
-
-  .themeGrid {
-    grid-template-columns: 1fr;
-  }
+/* ── Responsive (base + md:, not sm:) ───────────────────────── */
+@media (min-width: 768px) {
+  /* md+ overrides live in page.module.css */
 }
