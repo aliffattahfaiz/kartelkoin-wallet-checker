@@ -190,7 +190,7 @@
 }
 
 /* Chain cells get a subtle colored tint */
-.portfolioBento .bentoCell.chain.sol-anvil::before {
+.portfolioBento .bentoCell.chain-sol-anvil::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -198,7 +198,7 @@
   pointer-events: none;
 }
 
-.portfolioBento .bentoCell.chain.eth-anvil::before {
+.portfolioBento .bentoCell.chain-eth-anvil::before {
   content: '';
   position: absolute;
   inset: 0;
