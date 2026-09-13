@@ -540,26 +540,22 @@ export default function WalletChecker() {
               <Check size={9} /> Copied
             </span>
           </div>
+          <a
+            data-slot="explorer-button"
+            href={w.explorerUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={styles.explorerBtn}
+            title={`Open in ${chain === 'solana' ? 'Solscan' : 'Etherscan'}`}
+          >
+            <Eye size={10} /> View
+          </a>
         </div>
 
-        <a
-          data-slot="explorer-button"
-          href={w.explorerUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={styles.explorerBtn}
-          title={`Open in ${chain === 'solana' ? 'Solscan' : 'Etherscan'}`}
-        >
-          <Eye size={10} /> View
-        </a>
-
         <div className={styles.walletBalance}>
-          <div className={styles.balanceLabel}>
-            {chain === 'solana' ? 'Native (SOL)' : 'Native (ETH)'}
-          </div>
-          <div className={styles.balanceValue}>
+          <div className={styles.balanceValue} style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
             {w.nativeBalance != null ? fmt(w.nativeBalance, nativeDecimals) : '—'}
-            <span style={{ fontSize: '0.625rem', fontWeight: 400, color: 'var(--text-3)', marginLeft: 2 }}>
+            <span style={{ fontSize: '0.5rem', fontWeight: 400, color: 'var(--text-3)' }}>
               {nativeSymbol}
             </span>
           </div>
@@ -574,7 +570,6 @@ export default function WalletChecker() {
             )}
           </div>
         </div>
-
         {w.nftCount != null && w.nftCount > 0 && (
           <div className={styles.nftBadge}>
             <span className={styles.nftBadgeDot} />
