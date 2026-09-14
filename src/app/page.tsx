@@ -358,6 +358,162 @@ export default function WalletChecker() {
     }
   }, [autoRefresh, refreshInterval, fetchWallets]);
 
+  // ── Fetch transactions client-side (Solana signatures + ETH block scan) ─────
+  const fetchTransactions = useCallback(async () => {
+    if (wallets.length === 0) return;
+    const solAddrs = wallets.filter(w => w.chain === 'solana').map(w => w.address);
+    const ethAddrs = wallets.filter(w => w.chain === 'ethereum').map(w => w.address);
+
+    const solTxs: Transaction[] = [];
+    // Fetch Solana signatures + transactions (client-side RPC calls)
+    const SOL_RPC = 'https://api.mainnet-beta.solana.com';
+    const ethAddrSet = new Set(ethAddrs.map(a => a.toLowerCase()));
+
+    // Solana: fetch signatures per address, then getTransaction details
+    const sigLimit = 5; // per address
+    for (const addr of solAddrs.slice(0, 20)) {
+      try {
+        const res = await fetch(SOL_RPC, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0', id: 1, method: 'getSignaturesForAddress',
+            params: [addr, { limit: sigLimit }]
+          })
+        });
+        const data = await res.json();
+        const sigs = data.result || [];
+        for (const sig of sigs) {
+          try {
+            const res2 = await fetch(SOL_RPC, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                jsonrpc: '2.0', id: 1, method: 'getTransaction',
+                params: [sig.signature, { encoding: 'jsonParsed' }]
+              })
+            });
+            const txData = await res2.json();
+            const tx = txData.result;
+            if (!tx || !tx.meta) continue;
+            const blockTime = sig.blockTime ?? tx.blockTime ?? 0;
+            for (const instr of (tx.transaction?.message?.instructions || [])) {
+              const parsed = instr.parsed;
+              if (!parsed || parsed.type !== 'transfer') continue;
+              const info = parsed.info || {};
+              const from = info.source;
+              const to = info.destination;
+              const lamports = info.lamports;
+              const isFrom = from === addr;
+              const isTo = to === addr;
+              if (!isFrom && !isTo) continue;
+              const amount = Number(lamports || 0) / 1e9;
+              if (amount <= 0) continue;
+              solTxs.push({
+                signature: sig.signature,
+                chain: 'solana',
+                address: addr,
+                timestamp: blockTime * 1000,
+                direction: isTo && !isFrom ? 'in' : 'out',
+                amount,
+                symbol: 'SOL',
+                counterpart: (isTo && !isFrom ? from : to) || null,
+                isFee: false,
+              });
+            }
+            // Fee
+            try {
+              const fee = Number(tx.meta.fee) / 1e9;
+              if (fee > 0) {
+                solTxs.push({
+                  signature: sig.signature,
+                  chain: 'solana',
+                  address: addr,
+                  timestamp: blockTime * 1000,
+                  direction: 'out',
+                  amount: fee,
+                  symbol: 'SOL',
+                  counterpart: 'network_fee',
+                  isFee: true,
+                });
+              }
+            } catch {}
+          } catch {}
+        }
+      } catch {}
+    }
+
+    // Ethereum: scan recent blocks
+    const ethTxs: Transaction[] = [];
+    const ETH_RPC = 'https://ethereum-rpc.publicnode.com';
+    try {
+      const res = await fetch(ETH_RPC, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getBlockByNumber', params: ['latest', true] })
+      });
+      const data = await res.json();
+      const latestBlock = data.result;
+      const startBlock = parseInt(latestBlock?.number || '0x0', 16);
+
+      // Scan 50 recent blocks, 5 at a time
+      for (let i = 0; i < 50; i += 5) {
+        const blockPromises = [];
+        for (let j = 0; j < 5; j++) {
+          const blkNum = startBlock - i - j;
+          if (blkNum < 0) continue;
+          blockPromises.push(
+            fetch(ETH_RPC, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ jsonrpc: '2.0', id: j, method: 'eth_getBlockByNumber', params: ['0x' + blkNum.toString(16), true] })
+            }).then(r => r.json()).then(d => d.result).catch(() => null)
+          );
+        }
+        const blocks = await Promise.all(blockPromises);
+        for (const blk of blocks) {
+          if (!blk || !blk.transactions) continue;
+          const blkTs = Number(blk.timestamp || '0');
+          for (const tx of blk.transactions) {
+            const from = (tx.from || '').toLowerCase();
+            const to = (tx.to || '').toLowerCase();
+            const isFrom = ethAddrSet.has(from);
+            const isTo = ethAddrSet.has(to);
+            if (!isFrom && !isTo) continue;
+            try {
+              const amount = Number(BigInt(tx.value || '0x0')) / 1e18;
+              if (amount <= 0) continue;
+              const walletAddr = isFrom ? tx.from : ethAddrs.find(a => a.toLowerCase() === to) || '';
+              ethTxs.push({
+                signature: tx.hash,
+                chain: 'ethereum',
+                address: walletAddr || tx.from,
+                timestamp: blkTs * 1000,
+                direction: isTo && !isFrom ? 'in' : 'out',
+                amount,
+                symbol: 'ETH',
+                counterpart: (isTo && !isFrom ? tx.from : to) || null,
+                isFee: false,
+              });
+            } catch {}
+          }
+        }
+      }
+    } catch {}
+
+    const allTxs = [...solTxs, ...ethTxs]
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, 50);
+    setTransactions(allTxs);
+  }, [wallets]);
+
+  // Auto-fetch transactions when wallets change
+  useEffect(() => {
+    if (wallets.length > 0) {
+      fetchTransactions();
+    }
+  }, [wallets, fetchTransactions]);
+
   // Pre-load custom tokens (loaded once on mount; stored in GitHub)
   useEffect(() => {
     fetch('/api/custom-tokens')
