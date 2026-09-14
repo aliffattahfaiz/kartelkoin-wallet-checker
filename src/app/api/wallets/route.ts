@@ -292,45 +292,64 @@ type Transaction = {
 async function getSolTransactionsBatch(addrs: string[], limit = 10): Promise<Transaction[]> {
   if (addrs.length === 0) return [];
 
-  // Collect signatures for all addresses — parallelized per address
-  const sigsPerAddr = await Promise.all(
-    addrs.map(async (addr): Promise<Array<{ signature: string; blockTime: number | null; addr: string }>> => {
-      try {
-        const result = await jsonRpc('getSignaturesForAddress', [addr, { limit: limit * 3 }], SOLANA_RPC);
-        const seen = new Set<string>();
-        const out: Array<{ signature: string; blockTime: number | null; addr: string }> = [];
-        for (const s of (result || [])) {
-          if (s.signature && !seen.has(s.signature)) {
-            seen.add(s.signature);
-            out.push({ signature: s.signature, blockTime: s.blockTime, addr });
-            if (out.length >= limit) break;
+  // Collect signatures for all addresses — process in small sequential chunks
+  // to avoid rate-limiting on the public Solana RPC.
+  const sigsPerAddr: Array<{ signature: string; blockTime: number | null; addr: string }> = [];
+  const CHUNK = 5;
+  for (let i = 0; i < addrs.length; i += CHUNK) {
+    const chunk = addrs.slice(i, i + CHUNK);
+    const batch = await Promise.all(
+      chunk.map(async (addr): Promise<Array<{ signature: string; blockTime: number | null; addr: string }>> => {
+        let retries = 0;
+        while (retries < 3) {
+          try {
+            const result = await jsonRpc('getSignaturesForAddress', [addr, { limit: limit * 3 }], SOLANA_RPC);
+            const seen = new Set<string>();
+            const out: Array<{ signature: string; blockTime: number | null; addr: string }> = [];
+            for (const s of (result || [])) {
+              if (s.signature && !seen.has(s.signature)) {
+                seen.add(s.signature);
+                out.push({ signature: s.signature, blockTime: s.blockTime, addr });
+                if (out.length >= limit) break;
+              }
+            }
+            return out;
+          } catch (err) {
+            retries++;
+            if (retries >= 3) return [];
+            await new Promise(r => setTimeout(r, 200 * retries));
           }
         }
-        return out;
-      } catch {
         return [];
-      }
-    })
-  );
+      })
+    );
+    sigsPerAddr.push(...batch.flat());
+    // Small delay between chunks
+    if (i + CHUNK < addrs.length) await new Promise(r => setTimeout(r, 100));
+  }
 
   // Flatten all signatures
-  const allSigs: Array<{ signature: string; blockTime: number | null; addr: string }> = sigsPerAddr.flat();
-
-  if (allSigs.length === 0) return [];
+  if (sigsPerAddr.length === 0) return [];
 
   // Fetch transaction details — chunked to avoid overwhelming RPC
-  const CHUNK = 10;
-  const txResults: Array<{ s: typeof allSigs[0]; tx: any | null }> = [];
-  for (let i = 0; i < allSigs.length; i += CHUNK) {
-    const chunk = allSigs.slice(i, i + CHUNK);
+  const CHUNK_SIZE = 10;
+  const txResults: Array<{ s: typeof sigsPerAddr[0]; tx: any | null }> = [];
+  for (let i = 0; i < sigsPerAddr.length; i += CHUNK_SIZE) {
+    const chunk = sigsPerAddr.slice(i, i + CHUNK_SIZE);
     const batch = await Promise.all(
       chunk.map(async (s) => {
-        try {
-          const tx = await jsonRpc('getTransaction', [s.signature, { maxSupportedTransactionHistory: 0, encoding: 'jsonParsed' }], SOLANA_RPC);
-          return { s, tx };
-        } catch {
-          return { s, tx: null };
+        let retries = 0;
+        while (retries < 3) {
+          try {
+            const tx = await jsonRpc('getTransaction', [s.signature, { maxSupportedTransactionHistory: 0, encoding: 'jsonParsed' }], SOLANA_RPC);
+            return { s, tx };
+          } catch (err) {
+            retries++;
+            if (retries >= 3) return { s, tx: null };
+            await new Promise(r => setTimeout(r, 200 * retries));
+          }
         }
+        return { s, tx: null };
       })
     );
     txResults.push(...batch);
@@ -383,15 +402,14 @@ async function getSolTransactionsBatch(addrs: string[], limit = 10): Promise<Tra
           direction: 'out',
           amount: fee,
           symbol: 'SOL',
-          counterpart: null,
+          counterpart: 'network_fee',
           isFee: true,
         });
       }
     } catch {}
   }
 
-  // Sort by timestamp descending
-  return out.sort((a, b) => b.timestamp - a.timestamp);
+  return out.sort((a, b) => b.timestamp - a.timestamp).slice(0, limit * addrs.length);
 }
 
 // ── Ethereum transactions (scan recent blocks) ──────────────────────────
@@ -613,7 +631,7 @@ export async function GET(req: NextRequest) {
     const allTransactions = [...(solTxsP || []), ...(ethTxsP || [])]
       .sort((a, b) => b.timestamp - a.timestamp)
       .slice(0, 50);
-    return NextResponse.json({ wallets: finalWallets, prices, sparklines, transactions: allTransactions });
+    return NextResponse.json({ wallets: finalWallets, prices, sparklines, transactions: allTransactions, _debug: { solTxs: (solTxsP || []).length, ethTxs: (ethTxsP || []).length, solAddrCount: solAddrs.length, ethAddrCount: ethAddrs.length } });
   } catch (err: any) {
     console.error('Wallet fetch error:', err);
     return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
