@@ -72,30 +72,45 @@ async function getFile(path: string): Promise<{ content: any; sha?: string }> {
 
 async function getSolBalancesBatch(addrs: string[]): Promise<Record<string, number>> {
   if (addrs.length === 0) return {};
-  try {
-    const result = await jsonRpc('getMultipleAccounts', [
-      addrs,
-      { encoding: 'jsonParsed' }
-    ], SOLANA_RPC);
-    const values = result.value || result;
-    const out: Record<string, number> = {};
-    for (let i = 0; i < addrs.length; i++) {
-      const acc = values[i];
-      if (!acc || acc === null) { out[addrs[i]] = 0; }
-      else {
-        const lamports = acc.lamports || (acc.data?.parsed?.info?.lamports?.amount ? Number(acc.data.parsed.info.lamports.amount) : null);
-        out[addrs[i]] = lamports != null ? lamports / 1e9 : 0;
+  const out: Record<string, number> = {};
+
+  // Chunk addresses to avoid RPC limits (max ~50 per call)
+  const CHUNK = 40;
+  for (let i = 0; i < addrs.length; i += CHUNK) {
+    const chunkAddrs = addrs.slice(i, i + CHUNK);
+    let retries = 0;
+    while (retries < 3) {
+      try {
+        const result = await jsonRpc('getMultipleAccounts', [
+          chunkAddrs,
+          { encoding: 'jsonParsed' }
+        ], SOLANA_RPC);
+        const values = result.value || result;
+        for (let j = 0; j < chunkAddrs.length; j++) {
+          const acc = values[j];
+          if (!acc || acc === null) {
+            out[chunkAddrs[j]] = 0;
+          } else {
+            const lamports = acc.lamports || (acc.data?.parsed?.info?.lamports?.amount ? Number(acc.data.parsed.info.lamports.amount) : null);
+            out[chunkAddrs[j]] = lamports != null ? lamports / 1e9 : 0;
+          }
+        }
+        break; // success, move to next chunk
+      } catch {
+        retries++;
+        if (retries >= 3) {
+          // Fall back to individual balance fetch
+          await Promise.all(chunkAddrs.map(async (addr) => {
+            try { out[addr] = await getSolBalance(addr); }
+            catch { out[addr] = 0; }
+          }));
+        } else {
+          await new Promise(r => setTimeout(r, 200 * retries));
+        }
       }
     }
-    return out;
-  } catch {
-    const out: Record<string, number> = {};
-    await Promise.all(addrs.map(async (addr) => {
-      try { out[addr] = await getSolBalance(addr); }
-      catch { out[addr] = 0; }
-    }));
-    return out;
   }
+  return out;
 }
 
 async function getSolBalance(addr: string): Promise<number> {
