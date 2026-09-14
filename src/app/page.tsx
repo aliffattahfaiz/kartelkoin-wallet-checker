@@ -65,7 +65,6 @@ interface ApiResponse {
   wallets: Wallet[];
   prices: PriceMap;
   sparklines: Record<string, number[]>;
-  transactions: Transaction[];
 }
 
 // ── Theme & Currency ────────────────────────────────────────────────────
@@ -341,7 +340,7 @@ export default function WalletChecker() {
       setWallets(data.wallets);
       setPrices(data.prices);
       setSparklines(data.sparklines);
-      setTransactions(data.transactions || []);
+      setTransactions([]);
       setLastRefreshed(new Date());
     } catch (err: any) {
       setError(err.message || 'Something went wrong');
@@ -365,13 +364,20 @@ export default function WalletChecker() {
     const ethAddrs = wallets.filter(w => w.chain === 'ethereum').map(w => w.address);
 
     const solTxs: Transaction[] = [];
-    // Fetch Solana signatures + transactions (client-side RPC calls)
     const SOL_RPC = 'https://api.mainnet-beta.solana.com';
     const ethAddrSet = new Set(ethAddrs.map(a => a.toLowerCase()));
 
+    // Simple semaphore to limit concurrency (browser allows ~6 concurrent per origin)
+    const sem = (n: number) => { let a = 0; return { async run<T>(fn: () => Promise<T>): Promise<T> { while (a >= n) await new Promise(r => setTimeout(r, 50)); a++; try { return await fn(); } finally { a--; } } }; };
+    const solSem = sem(6);
+
     // Solana: fetch signatures per address, then getTransaction details
     const sigLimit = 5; // per address
-    for (const addr of solAddrs.slice(0, 20)) {
+    const sigAddrs = solAddrs.slice(0, 20);
+
+    // Phase 1: Fetch all signatures in parallel (limited concurrency)
+    const allSigs: Array<{ signature: string; blockTime: number | null; addr: string }> = [];
+    await Promise.all(sigAddrs.map(addr => solSem.run(async () => {
       try {
         const res = await fetch(SOL_RPC, {
           method: 'POST',
@@ -383,65 +389,78 @@ export default function WalletChecker() {
         });
         const data = await res.json();
         const sigs = data.result || [];
+        const seen = new Set<string>();
         for (const sig of sigs) {
-          try {
-            const res2 = await fetch(SOL_RPC, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                jsonrpc: '2.0', id: 1, method: 'getTransaction',
-                params: [sig.signature, { encoding: 'jsonParsed' }]
-              })
-            });
-            const txData = await res2.json();
-            const tx = txData.result;
-            if (!tx || !tx.meta) continue;
-            const blockTime = sig.blockTime ?? tx.blockTime ?? 0;
-            for (const instr of (tx.transaction?.message?.instructions || [])) {
-              const parsed = instr.parsed;
-              if (!parsed || parsed.type !== 'transfer') continue;
-              const info = parsed.info || {};
-              const from = info.source;
-              const to = info.destination;
-              const lamports = info.lamports;
-              const isFrom = from === addr;
-              const isTo = to === addr;
-              if (!isFrom && !isTo) continue;
-              const amount = Number(lamports || 0) / 1e9;
-              if (amount <= 0) continue;
-              solTxs.push({
-                signature: sig.signature,
-                chain: 'solana',
-                address: addr,
-                timestamp: blockTime * 1000,
-                direction: isTo && !isFrom ? 'in' : 'out',
-                amount,
-                symbol: 'SOL',
-                counterpart: (isTo && !isFrom ? from : to) || null,
-                isFee: false,
-              });
-            }
-            // Fee
-            try {
-              const fee = Number(tx.meta.fee) / 1e9;
-              if (fee > 0) {
-                solTxs.push({
-                  signature: sig.signature,
-                  chain: 'solana',
-                  address: addr,
-                  timestamp: blockTime * 1000,
-                  direction: 'out',
-                  amount: fee,
-                  symbol: 'SOL',
-                  counterpart: 'network_fee',
-                  isFee: true,
-                });
-              }
-            } catch {}
-          } catch {}
+          if (sig.signature && !seen.has(sig.signature)) {
+            seen.add(sig.signature);
+            allSigs.push({ signature: sig.signature, blockTime: sig.blockTime, addr });
+          }
         }
       } catch {}
-    }
+    })));
+
+    // Phase 2: Fetch transaction details (limited concurrency)
+    const txSem = sem(6);
+    await Promise.all(allSigs.map(s => txSem.run(async () => {
+      try {
+        const res2 = await fetch(SOL_RPC, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0', id: 1, method: 'getTransaction',
+            params: [s.signature, { encoding: 'jsonParsed' }]
+          })
+        });
+        const txData = await res2.json();
+        const tx = txData.result;
+        if (!tx || !tx.meta) return;
+        const blockTime = s.blockTime ?? tx.blockTime ?? 0;
+        const walletAddr = s.addr;
+
+        // Parse SOL transfers from transfer instructions
+        for (const instr of (tx.transaction?.message?.instructions || [])) {
+          const parsed = instr.parsed;
+          if (!parsed || parsed.type !== 'transfer') continue;
+          const info = parsed.info || {};
+          const from = info.source;
+          const to = info.destination;
+          const lamports = info.lamports;
+          const isFrom = from === walletAddr;
+          const isTo = to === walletAddr;
+          if (!isFrom && !isTo) continue;
+          const amount = Number(lamports || 0) / 1e9;
+          if (amount <= 0) continue;
+          solTxs.push({
+            signature: s.signature,
+            chain: 'solana',
+            address: walletAddr,
+            timestamp: blockTime * 1000,
+            direction: isTo && !isFrom ? 'in' : 'out',
+            amount,
+            symbol: 'SOL',
+            counterpart: (isTo && !isFrom ? from : to) || null,
+            isFee: false,
+          });
+        }
+        // Fee
+        try {
+          const fee = Number(tx.meta.fee) / 1e9;
+          if (fee > 0) {
+            solTxs.push({
+              signature: s.signature,
+              chain: 'solana',
+              address: walletAddr,
+              timestamp: blockTime * 1000,
+              direction: 'out',
+              amount: fee,
+              symbol: 'SOL',
+              counterpart: 'network_fee',
+              isFee: true,
+            });
+          }
+        } catch {}
+      } catch {}
+    })));
 
     // Ethereum: scan recent blocks
     const ethTxs: Transaction[] = [];
