@@ -289,19 +289,22 @@ type Transaction = {
 };
 
 // ── Solana transactions ───────────────────────────────────────────────────
-async function getSolTransactionsBatch(addrs: string[], limit = 10): Promise<Transaction[]> {
+async function getSolTransactionsBatch(addrs: string[], limit = 3): Promise<Transaction[]> {
   if (addrs.length === 0) return [];
+
+  // Limit to first 15 addresses to stay within Vercel's 10s timeout
+  const priorityAddrs = addrs.slice(0, 15);
 
   // Collect signatures for all addresses — process in small sequential chunks
   // to avoid rate-limiting on the public Solana RPC.
   const sigsPerAddr: Array<{ signature: string; blockTime: number | null; addr: string }> = [];
-  const CHUNK = 5;
-  for (let i = 0; i < addrs.length; i += CHUNK) {
-    const chunk = addrs.slice(i, i + CHUNK);
+  const CHUNK = 15;  // Process all 15 addresses in parallel
+  for (let i = 0; i < priorityAddrs.length; i += CHUNK) {
+    const chunk = priorityAddrs.slice(i, i + CHUNK);
     const batch = await Promise.all(
       chunk.map(async (addr): Promise<Array<{ signature: string; blockTime: number | null; addr: string }>> => {
         let retries = 0;
-        while (retries < 3) {
+        while (retries < 2) {
           try {
             const result = await jsonRpc('getSignaturesForAddress', [addr, { limit: limit * 3 }], SOLANA_RPC);
             const seen = new Set<string>();
@@ -316,16 +319,14 @@ async function getSolTransactionsBatch(addrs: string[], limit = 10): Promise<Tra
             return out;
           } catch (err) {
             retries++;
-            if (retries >= 3) return [];
-            await new Promise(r => setTimeout(r, 200 * retries));
+            if (retries >= 2) return [];
+            await new Promise(r => setTimeout(r, 100 * retries));
           }
         }
         return [];
       })
     );
     sigsPerAddr.push(...batch.flat());
-    // Small delay between chunks
-    if (i + CHUNK < addrs.length) await new Promise(r => setTimeout(r, 100));
   }
 
   // Flatten all signatures
@@ -422,8 +423,8 @@ async function getEthTransactionsBatch(addrs: string[], limit = 20): Promise<Tra
   try {
     const block = await jsonRpc('eth_getBlockByNumber', ['latest', true], ETH_RPC);
 
-    // Scan last ~100 blocks (parallelized to avoid timeout)
-    const scanDepth = 100;
+    // Scan last ~20 blocks (parallelized to avoid timeout)
+    const scanDepth = 20;
     const startBlock = parseInt(block.number || '0x0', 16);
 
     const blockNums: number[] = [];
@@ -631,7 +632,7 @@ export async function GET(req: NextRequest) {
     const allTransactions = [...(solTxsP || []), ...(ethTxsP || [])]
       .sort((a, b) => b.timestamp - a.timestamp)
       .slice(0, 50);
-    return NextResponse.json({ wallets: finalWallets, prices, sparklines, transactions: allTransactions, _debug: { solTxs: (solTxsP || []).length, ethTxs: (ethTxsP || []).length, solAddrCount: solAddrs.length, ethAddrCount: ethAddrs.length } });
+    return NextResponse.json({ wallets: finalWallets, prices, sparklines, transactions: allTransactions });
   } catch (err: any) {
     console.error('Wallet fetch error:', err);
     return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
