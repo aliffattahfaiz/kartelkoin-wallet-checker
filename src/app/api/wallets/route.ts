@@ -289,47 +289,52 @@ type Transaction = {
 };
 
 // ── Solana transactions ───────────────────────────────────────────────────
-async function getSolTransactionsBatch(addrs: string[], limit = 20): Promise<Transaction[]> {
+async function getSolTransactionsBatch(addrs: string[], limit = 10): Promise<Transaction[]> {
   if (addrs.length === 0) return [];
 
-  async function getSigsForAddr(addr: string, before?: string): Promise<any[]> {
-    try {
-      const params: unknown[] = [addr, { limit: 1000, ...(before ? { before } : {}) }];
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return await jsonRpc('getSignaturesForAddress', params, SOLANA_RPC);
-    } catch {
-      return [];
-    }
-  }
-
-  // Collect signatures for all addresses
-  let allSigs: Array<{ signature: string; slot: number; blockTime: number | null; addr: string }> = [];
-  for (const addr of addrs) {
-    let sigs = await getSigsForAddr(addr);
-    // Dedupe and take first `limit` per address (most recent)
-    const seen = new Set<string>();
-    for (const s of sigs) {
-      if (s.signature && !seen.has(s.signature)) {
-        seen.add(s.signature);
-        allSigs.push({ signature: s.signature, slot: s.slot, blockTime: s.blockTime, addr });
-        if (allSigs.filter(x => x.addr === addr).length >= limit) break;
-      }
-    }
-  }
-
-  if (allSigs.length === 0) return [];
-
-  // Batch-fetch transaction details
-  const txResults = await Promise.all(
-    allSigs.map(async (s) => {
+  // Collect signatures for all addresses — parallelized per address
+  const sigsPerAddr = await Promise.all(
+    addrs.map(async (addr): Promise<Array<{ signature: string; blockTime: number | null; addr: string }>> => {
       try {
-        const tx = await jsonRpc('getTransaction', [s.signature, { maxSupportedTransactionHistory: 0, encoding: 'jsonParsed' }], SOLANA_RPC);
-        return { s, tx };
+        const result = await jsonRpc('getSignaturesForAddress', [addr, { limit: limit * 3 }], SOLANA_RPC);
+        const seen = new Set<string>();
+        const out: Array<{ signature: string; blockTime: number | null; addr: string }> = [];
+        for (const s of (result || [])) {
+          if (s.signature && !seen.has(s.signature)) {
+            seen.add(s.signature);
+            out.push({ signature: s.signature, blockTime: s.blockTime, addr });
+            if (out.length >= limit) break;
+          }
+        }
+        return out;
       } catch {
-        return { s, tx: null };
+        return [];
       }
     })
   );
+
+  // Flatten all signatures
+  const allSigs: Array<{ signature: string; blockTime: number | null; addr: string }> = sigsPerAddr.flat();
+
+  if (allSigs.length === 0) return [];
+
+  // Fetch transaction details — chunked to avoid overwhelming RPC
+  const CHUNK = 10;
+  const txResults: Array<{ s: typeof allSigs[0]; tx: any | null }> = [];
+  for (let i = 0; i < allSigs.length; i += CHUNK) {
+    const chunk = allSigs.slice(i, i + CHUNK);
+    const batch = await Promise.all(
+      chunk.map(async (s) => {
+        try {
+          const tx = await jsonRpc('getTransaction', [s.signature, { maxSupportedTransactionHistory: 0, encoding: 'jsonParsed' }], SOLANA_RPC);
+          return { s, tx };
+        } catch {
+          return { s, tx: null };
+        }
+      })
+    );
+    txResults.push(...batch);
+  }
 
   const out: Transaction[] = [];
   for (const { s, tx } of txResults) {
@@ -346,7 +351,6 @@ async function getSolTransactionsBatch(addrs: string[], limit = 20): Promise<Tra
       const to = info.destination as string | undefined;
       const lamports = info.lamports as string | number | undefined;
 
-      // Only consider transfers involving our wallet address
       const isFrom = from === walletAddr;
       const isTo = to === walletAddr;
       if (!isFrom && !isTo) continue;
@@ -367,7 +371,7 @@ async function getSolTransactionsBatch(addrs: string[], limit = 20): Promise<Tra
       });
     }
 
-    // Also detect fee payments (from pre/post balances)
+    // Detect fee payments
     try {
       const fee = Number(tx.meta.fee) / 1e9;
       if (fee > 0) {
@@ -395,56 +399,63 @@ async function getEthTransactionsBatch(addrs: string[], limit = 20): Promise<Tra
   if (addrs.length === 0) return [];
 
   const addrSet = new Set(addrs.map(a => a.toLowerCase()));
-  let txs: Transaction[] = [];
+  const txs: Transaction[] = [];
 
   try {
     const block = await jsonRpc('eth_getBlockByNumber', ['latest', true], ETH_RPC);
-    const latestTs = Number(block.timestamp || '0');
 
-    // Scan last ~300 blocks (roughly 1 hour of transactions)
-    const scanDepth = 300;
-    let startBlock = parseInt(block.number || '0x0', 16);
-    let collected = 0;
+    // Scan last ~100 blocks (parallelized to avoid timeout)
+    const scanDepth = 100;
+    const startBlock = parseInt(block.number || '0x0', 16);
 
-    for (let i = 0; i < scanDepth && collected < limit * addrs.length; i++) {
+    const blockNums: number[] = [];
+    for (let i = 0; i < scanDepth; i++) {
       const blkNum = startBlock - i;
       if (blkNum < 0) break;
-      const blk = await jsonRpc('eth_getBlockByNumber', ['0x' + blkNum.toString(16), true], ETH_RPC);
-      if (!blk || !blk.transactions) continue;
-      const blkTs = Number(blk.timestamp || '0');
+      blockNums.push(blkNum);
+    }
 
-      for (const tx of blk.transactions) {
-        const from = (tx.from || '').toLowerCase();
-        const to = (tx.to || '').toLowerCase();
-        const isFrom = addrSet.has(from);
-        const isTo = addrSet.has(to);
-        const isContractCreation = !to; // contract creation
-        if (!isFrom && !isTo) continue;
+    // Process blocks in parallel chunks
+    const CHUNK = 10;
+    for (let i = 0; i < blockNums.length; i += CHUNK) {
+      const chunk = blockNums.slice(i, i + CHUNK);
+      await Promise.all(chunk.map(async (blkNum) => {
+        const blk = await jsonRpc('eth_getBlockByNumber', ['0x' + blkNum.toString(16), true], ETH_RPC);
+        if (!blk || !blk.transactions) return;
+        const blkTs = Number(blk.timestamp || '0');
 
-        let amount = 0;
-        try { amount = Number(BigInt(tx.value || '0x0')) / 1e18; } catch { amount = 0; }
-        if (amount <= 0) continue;
+        for (const tx of blk.transactions) {
+          const from = (tx.from || '').toLowerCase();
+          const to = (tx.to || '').toLowerCase();
+          const isFrom = addrSet.has(from);
+          const isTo = addrSet.has(to);
+          const isContractCreation = !to;
+          if (!isFrom && !isTo) continue;
 
-        const walletAddr = isFrom ? tx.from : addrs.find(a => a.toLowerCase() === to)!;
-        txs.push({
-          signature: tx.hash,
-          chain: 'ethereum',
-          address: walletAddr || tx.from,
-          timestamp: blkTs * 1000,
-          direction: isTo && !isFrom && !isContractCreation ? 'in' : 'out',
-          amount,
-          symbol: 'ETH',
-          counterpart: isTo && !isFrom ? tx.from : to,
-          isFee: false,
-        });
-        collected++;
-      }
+          let amount = 0;
+          try { amount = Number(BigInt(tx.value || '0x0')) / 1e18; } catch { amount = 0; }
+          if (amount <= 0) continue;
+
+          const walletAddr = isFrom ? tx.from : addrs.find(a => a.toLowerCase() === to) || '';
+          txs.push({
+            signature: tx.hash,
+            chain: 'ethereum',
+            address: walletAddr || tx.from,
+            timestamp: blkTs * 1000,
+            direction: isTo && !isFrom && !isContractCreation ? 'in' : 'out',
+            amount,
+            symbol: 'ETH',
+            counterpart: (isTo && !isFrom ? tx.from : to) || null,
+            isFee: false,
+          });
+        }
+      }));
     }
   } catch {
     // If block scanning fails, return empty
   }
 
-  return txs.sort((a, b) => b.timestamp - a.timestamp).slice(0, limit * addrs.length).sort((a, b) => b.timestamp - a.timestamp);
+  return txs.sort((a, b) => b.timestamp - a.timestamp).slice(0, limit * addrs.length);
 }
 
 // ── Main handler ────────────────────────────────────────────────────────
