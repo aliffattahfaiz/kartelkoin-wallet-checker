@@ -629,10 +629,7 @@ export async function GET(req: NextRequest) {
     });
 
     const finalWallets = [...solResults, ...ethResults];
-    const allTransactions = [...(solTxsP || []), ...(ethTxsP || [])]
-      .sort((a, b) => b.timestamp - a.timestamp)
-      .slice(0, 50);
-    return NextResponse.json({ wallets: finalWallets, prices, sparklines, transactions: allTransactions });
+    return NextResponse.json({ wallets: finalWallets, prices, sparklines });
   } catch (err: any) {
     console.error('Wallet fetch error:', err);
     return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
