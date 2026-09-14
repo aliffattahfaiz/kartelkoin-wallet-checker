@@ -74,12 +74,12 @@ async function getSolBalancesBatch(addrs: string[]): Promise<Record<string, numb
   if (addrs.length === 0) return {};
   const out: Record<string, number> = {};
 
-  // Chunk addresses to avoid RPC limits (max ~50 per call)
-  const CHUNK = 40;
+  // Chunk addresses to avoid RPC limits (max ~30 per call)
+  const CHUNK = 30;
   for (let i = 0; i < addrs.length; i += CHUNK) {
     const chunkAddrs = addrs.slice(i, i + CHUNK);
     let retries = 0;
-    while (retries < 3) {
+    while (retries < 5) {
       try {
         const result = await jsonRpc('getMultipleAccounts', [
           chunkAddrs,
@@ -98,12 +98,10 @@ async function getSolBalancesBatch(addrs: string[]): Promise<Record<string, numb
         break; // success, move to next chunk
       } catch {
         retries++;
-        if (retries >= 3) {
-          // Fall back to individual balance fetch
-          await Promise.all(chunkAddrs.map(async (addr) => {
-            try { out[addr] = await getSolBalance(addr); }
-            catch { out[addr] = 0; }
-          }));
+        if (retries >= 5) {
+          // Fall back to individual balance fetch (sequential to avoid rate-limit)
+          const fallback = await getSolBalanceFallback(chunkAddrs);
+          Object.assign(out, fallback);
         } else {
           await new Promise(r => setTimeout(r, 200 * retries));
         }
@@ -115,9 +113,23 @@ async function getSolBalancesBatch(addrs: string[]): Promise<Record<string, numb
 
 async function getSolBalance(addr: string): Promise<number> {
   try {
-    const lamports = await jsonRpc('getBalance', [addr], SOLANA_RPC);
-    return Number(lamports.value?.lamports ?? lamports) / 1e9;
+    const res = await jsonRpc('getBalance', [addr], SOLANA_RPC);
+    // getBalance returns { value: <lamports> }
+    return Number(res?.value ?? res) / 1e9;
   } catch { return 0; }
+}
+
+// Fallback: fetch one address at a time with delay
+async function getSolBalanceFallback(addrs: string[]): Promise<Record<string, number>> {
+  const out: Record<string, number> = {};
+  for (const addr of addrs) {
+    try {
+      out[addr] = await getSolBalance(addr);
+    } catch { out[addr] = 0; }
+    // Small delay to avoid rate-limit
+    await new Promise(r => setTimeout(r, 100));
+  }
+  return out;
 }
 
 async function getSolTokenAccountsBatch(addrs: string[]): Promise<Record<string, Array<{ mint: string; amount: bigint; decimals: number }>>> {
