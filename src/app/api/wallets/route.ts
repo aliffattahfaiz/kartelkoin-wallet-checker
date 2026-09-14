@@ -505,7 +505,7 @@ export async function GET(req: NextRequest) {
     if (walletData.length === 0) {
       const prices = await getCoinGeckoPrices();
       const sparklines = await getSparklineData(SPARKLINE_COINS);
-      return NextResponse.json({ wallets: [], prices, sparklines, transactions: [] });
+      return NextResponse.json({ wallets: [], prices, sparklines });
     }
 
     // 2. Fetch all prices (multi-currency) concurrently with on-chain fetches
