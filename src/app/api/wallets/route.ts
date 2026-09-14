@@ -296,7 +296,7 @@ async function getSolTransactionsBatch(addrs: string[], limit = 20): Promise<Tra
     try {
       const params: unknown[] = [addr, { limit: 1000, ...(before ? { before } : {}) }];
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return await jsonRpc('getConfirmedSignaturesForAddress2', params, SOLANA_RPC);
+      return await jsonRpc('getSignaturesForAddress', params, SOLANA_RPC);
     } catch {
       return [];
     }
@@ -342,8 +342,8 @@ async function getSolTransactionsBatch(addrs: string[], limit = 20): Promise<Tra
       const parsed = instr.parsed;
       if (!parsed || parsed.type !== 'transfer') continue;
       const info = parsed.info || {};
-      const from = info.from as string | undefined;
-      const to = info.to as string | undefined;
+      const from = info.source as string | undefined;
+      const to = info.destination as string | undefined;
       const lamports = info.lamports as string | number | undefined;
 
       // Only consider transfers involving our wallet address
@@ -352,7 +352,6 @@ async function getSolTransactionsBatch(addrs: string[], limit = 20): Promise<Tra
       if (!isFrom && !isTo) continue;
 
       const amount = Number(lamports) / 1e9;
-      // Skip zero amounts
       if (amount <= 0) continue;
 
       out.push({
