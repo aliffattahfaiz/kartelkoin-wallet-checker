@@ -47,10 +47,25 @@ interface Wallet {
 type PriceMap = Record<string, Record<string, number>>;
 type Currency = 'usd' | 'eur' | 'idr' | 'jpy' | 'gbp';
 
+// Transaction from API
+type TxDirection = 'in' | 'out';
+type Transaction = {
+  signature: string;
+  chain: 'solana' | 'ethereum';
+  address: string;
+  timestamp: number;
+  direction: TxDirection;
+  amount: number;
+  symbol: string;
+  counterpart: string | null;
+  isFee: boolean;
+};
+
 interface ApiResponse {
   wallets: Wallet[];
   prices: PriceMap;
   sparklines: Record<string, number[]>;
+  transactions: Transaction[];
 }
 
 // ── Theme & Currency ────────────────────────────────────────────────────
@@ -300,6 +315,7 @@ export default function WalletChecker() {
   const [loading, setLoading]          = useState(true);
   const [error, setError]              = useState<string | null>(null);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [settingsOpen, setSettingsOpen]   = useState(false);
   const [theme, setTheme]              = usePersistedTheme();
   const [currency, setCurrency]        = usePersistedCurrency();
@@ -325,6 +341,7 @@ export default function WalletChecker() {
       setWallets(data.wallets);
       setPrices(data.prices);
       setSparklines(data.sparklines);
+      setTransactions(data.transactions || []);
       setLastRefreshed(new Date());
     } catch (err: any) {
       setError(err.message || 'Something went wrong');
@@ -599,6 +616,85 @@ export default function WalletChecker() {
           </div>
         )}
       </motion.div>
+    );
+  }
+
+  // ── Helper: resolve address to nickname ──────────────────────────
+  const resolveAddress = (addr: string | null): string => {
+    if (!addr) return '—';
+    const nick = nicknames[addr.toLowerCase()];
+    if (nick) return nick;
+    return formatAddr(addr);
+  };
+
+  // ── Transaction tracker ────────────────────────────────────────
+  function TransactionTracker({ transactions, chain: chainFilter }: {
+    transactions: Transaction[];
+    chain?: 'solana' | 'ethereum' | undefined;
+  }) {
+    const [page, setPage] = useState(1);
+    const PER_PAGE = 10;
+    const displayTxs = chainFilter
+      ? transactions.filter(t => t.chain === chainFilter)
+      : transactions;
+    const paginated = displayTxs.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+    const hasMore = page * PER_PAGE < displayTxs.length;
+    const reduceMotion = useReducedMotion();
+
+    const formatTime = (ts: number) => {
+      const d = new Date(ts);
+      const relative = (() => {
+        const diffMin = Math.floor((Date.now() - ts) / 60000);
+        if (diffMin < 1) return 'now';
+        if (diffMin < 60) return `${diffMin}m ago`;
+        const diffHr = Math.floor(diffMin / 60);
+        if (diffHr < 24) return `${diffHr}h ago`;
+        const diffDay = Math.floor(diffHr / 24);
+        return `${diffDay}d ago`;
+      })();
+      return `${relative} · ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    };
+
+    return (
+      <div data-slot="transaction-tracker" className={styles.transactionTracker}>
+        <div className={styles.trackerHeader}>
+          <span className={styles.trackerTitle}>Recent Transactions</span>
+        </div>
+        <div className={styles.txList}>
+          {paginated.map((tx) => (
+            <div
+              key={tx.signature}
+              data-slot="tx-row"
+              className={styles.txRow}
+            >
+              <span className={`${styles.txDirection} ${styles[`${tx.direction}`]}`}>
+                {tx.direction === 'in' ? '↓' : '↑'}
+              </span>
+              <div className={styles.txAmount}>
+                {tx.direction === 'in' ? '+' : '−'} {tx.amount.toFixed(tx.amount < 0.01 ? 6 : 4)} {tx.symbol}
+              </div>
+              {tx.isFee && (
+                <span className={styles.txFeeTag}>fee</span>
+              )}
+              <div className={styles.txDetail}>
+                {tx.direction === 'in' ? 'From' : 'To'}: {resolveAddress(tx.counterpart)}
+              </div>
+              <span className={styles.txTime}>
+                {formatTime(tx.timestamp)}
+              </span>
+            </div>
+          ))}
+        </div>
+        {hasMore && (
+          <button
+            data-slot="tx-load-more"
+            className={`${styles.btn} ${styles.btnSecondary} ${styles.txLoadMore}`}
+            onClick={() => setPage(p => p + 1)}
+          >
+            Load more
+          </button>
+        )}
+      </div>
     );
   }
 
@@ -996,6 +1092,11 @@ export default function WalletChecker() {
                 />
               ))}
             </section>
+          )}
+
+          {/* Transaction tracker */}
+          {transactions.length > 0 && (
+            <TransactionTracker transactions={transactions} />
           )}
 
           {/* Status bar */}

@@ -275,6 +275,179 @@ function explorerUrl(addr: string, chain: 'solana' | 'ethereum'): string {
     : `https://etherscan.io/address/${addr}`;
 }
 
+// ── Transaction types ────────────────────────────────────────────────────
+type Transaction = {
+  signature: string;
+  chain: 'solana' | 'ethereum';
+  address: string;  // wallet address (for nickname lookup)
+  timestamp: number; // unix timestamp
+  direction: 'in' | 'out';
+  amount: number;    // SOL / ETH
+  symbol: string;    // 'SOL' | 'ETH'
+  counterpart: string | null; // from (for out) or to (for in) address
+  isFee: boolean;    // whether this was a fee payment
+};
+
+// ── Solana transactions ───────────────────────────────────────────────────
+async function getSolTransactionsBatch(addrs: string[], limit = 20): Promise<Transaction[]> {
+  if (addrs.length === 0) return [];
+
+  async function getSigsForAddr(addr: string, before?: string): Promise<any[]> {
+    try {
+      const params: unknown[] = [addr, { limit: 1000, ...(before ? { before } : {}) }];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return await jsonRpc('getConfirmedSignaturesForAddress2', params, SOLANA_RPC);
+    } catch {
+      return [];
+    }
+  }
+
+  // Collect signatures for all addresses
+  let allSigs: Array<{ signature: string; slot: number; blockTime: number | null; addr: string }> = [];
+  for (const addr of addrs) {
+    let sigs = await getSigsForAddr(addr);
+    // Dedupe and take first `limit` per address (most recent)
+    const seen = new Set<string>();
+    for (const s of sigs) {
+      if (s.signature && !seen.has(s.signature)) {
+        seen.add(s.signature);
+        allSigs.push({ signature: s.signature, slot: s.slot, blockTime: s.blockTime, addr });
+        if (allSigs.filter(x => x.addr === addr).length >= limit) break;
+      }
+    }
+  }
+
+  if (allSigs.length === 0) return [];
+
+  // Batch-fetch transaction details
+  const txResults = await Promise.all(
+    allSigs.map(async (s) => {
+      try {
+        const tx = await jsonRpc('getTransaction', [s.signature, { maxSupportedTransactionHistory: 0, encoding: 'jsonParsed' }], SOLANA_RPC);
+        return { s, tx };
+      } catch {
+        return { s, tx: null };
+      }
+    })
+  );
+
+  const out: Transaction[] = [];
+  for (const { s, tx } of txResults) {
+    if (!tx || !tx.meta) continue;
+    const blockTime = s.blockTime ?? tx.blockTime ?? 0;
+    const walletAddr = s.addr;
+
+    // Parse SOL transfers from transfer instructions
+    for (const instr of (tx.transaction?.message?.instructions || [])) {
+      const parsed = instr.parsed;
+      if (!parsed || parsed.type !== 'transfer') continue;
+      const info = parsed.info || {};
+      const from = info.from as string | undefined;
+      const to = info.to as string | undefined;
+      const lamports = info.lamports as string | number | undefined;
+
+      // Only consider transfers involving our wallet address
+      const isFrom = from === walletAddr;
+      const isTo = to === walletAddr;
+      if (!isFrom && !isTo) continue;
+
+      const amount = Number(lamports) / 1e9;
+      // Skip zero amounts
+      if (amount <= 0) continue;
+
+      out.push({
+        signature: s.signature,
+        chain: 'solana',
+        address: walletAddr,
+        timestamp: blockTime * 1000,
+        direction: isTo && !isFrom ? 'in' : 'out',
+        amount,
+        symbol: 'SOL',
+        counterpart: (isTo && !isFrom ? from : to) ?? null,
+        isFee: false,
+      });
+    }
+
+    // Also detect fee payments (from pre/post balances)
+    try {
+      const fee = Number(tx.meta.fee) / 1e9;
+      if (fee > 0) {
+        out.push({
+          signature: s.signature,
+          chain: 'solana',
+          address: walletAddr,
+          timestamp: blockTime * 1000,
+          direction: 'out',
+          amount: fee,
+          symbol: 'SOL',
+          counterpart: null,
+          isFee: true,
+        });
+      }
+    } catch {}
+  }
+
+  // Sort by timestamp descending
+  return out.sort((a, b) => b.timestamp - a.timestamp);
+}
+
+// ── Ethereum transactions (scan recent blocks) ──────────────────────────
+async function getEthTransactionsBatch(addrs: string[], limit = 20): Promise<Transaction[]> {
+  if (addrs.length === 0) return [];
+
+  const addrSet = new Set(addrs.map(a => a.toLowerCase()));
+  let txs: Transaction[] = [];
+
+  try {
+    const block = await jsonRpc('eth_getBlockByNumber', ['latest', true], ETH_RPC);
+    const latestTs = Number(block.timestamp || '0');
+
+    // Scan last ~300 blocks (roughly 1 hour of transactions)
+    const scanDepth = 300;
+    let startBlock = parseInt(block.number || '0x0', 16);
+    let collected = 0;
+
+    for (let i = 0; i < scanDepth && collected < limit * addrs.length; i++) {
+      const blkNum = startBlock - i;
+      if (blkNum < 0) break;
+      const blk = await jsonRpc('eth_getBlockByNumber', ['0x' + blkNum.toString(16), true], ETH_RPC);
+      if (!blk || !blk.transactions) continue;
+      const blkTs = Number(blk.timestamp || '0');
+
+      for (const tx of blk.transactions) {
+        const from = (tx.from || '').toLowerCase();
+        const to = (tx.to || '').toLowerCase();
+        const isFrom = addrSet.has(from);
+        const isTo = addrSet.has(to);
+        const isContractCreation = !to; // contract creation
+        if (!isFrom && !isTo) continue;
+
+        let amount = 0;
+        try { amount = Number(BigInt(tx.value || '0x0')) / 1e18; } catch { amount = 0; }
+        if (amount <= 0) continue;
+
+        const walletAddr = isFrom ? tx.from : addrs.find(a => a.toLowerCase() === to)!;
+        txs.push({
+          signature: tx.hash,
+          chain: 'ethereum',
+          address: walletAddr || tx.from,
+          timestamp: blkTs * 1000,
+          direction: isTo && !isFrom && !isContractCreation ? 'in' : 'out',
+          amount,
+          symbol: 'ETH',
+          counterpart: isTo && !isFrom ? tx.from : to,
+          isFee: false,
+        });
+        collected++;
+      }
+    }
+  } catch {
+    // If block scanning fails, return empty
+  }
+
+  return txs.sort((a, b) => b.timestamp - a.timestamp).slice(0, limit * addrs.length).sort((a, b) => b.timestamp - a.timestamp);
+}
+
 // ── Main handler ────────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
   try {
@@ -303,7 +476,7 @@ export async function GET(req: NextRequest) {
     if (walletData.length === 0) {
       const prices = await getCoinGeckoPrices();
       const sparklines = await getSparklineData(SPARKLINE_COINS);
-      return NextResponse.json({ wallets: [], prices, sparklines });
+      return NextResponse.json({ wallets: [], prices, sparklines, transactions: [] });
     }
 
     // 2. Fetch all prices (multi-currency) concurrently with on-chain fetches
@@ -316,14 +489,16 @@ export async function GET(req: NextRequest) {
     const solAddrs = solWallets.map(w => w.address);
     const ethAddrs = ethWallets.map(w => w.address);
 
-    // 3. Batch on-chain fetches
-    const [solBalancesP, solTokenAccountsP, ethBalancesP, ethTokenBalancesP, prices, sparklines] = await Promise.all([
+    // 3. Batch on-chain fetches (balances + transactions)
+    const [solBalancesP, solTokenAccountsP, ethBalancesP, ethTokenBalancesP, prices, sparklines, solTxsP, ethTxsP] = await Promise.all([
       getSolBalancesBatch(solAddrs),
       getSolTokenAccountsBatch(solAddrs),
       getEthBalancesBatch(ethAddrs),
       getErc20BalancesBatch(ethAddrs, ETH_STABLECOINS),
       pricesP,
       sparklinesP,
+      getSolTransactionsBatch(solAddrs),
+      getEthTransactionsBatch(ethAddrs),
     ]);
 
     // 4. Build Solana wallet results
@@ -425,7 +600,10 @@ export async function GET(req: NextRequest) {
     });
 
     const finalWallets = [...solResults, ...ethResults];
-    return NextResponse.json({ wallets: finalWallets, prices, sparklines });
+    const allTransactions = [...(solTxsP || []), ...(ethTxsP || [])]
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, 50);
+    return NextResponse.json({ wallets: finalWallets, prices, sparklines, transactions: allTransactions });
   } catch (err: any) {
     console.error('Wallet fetch error:', err);
     return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
