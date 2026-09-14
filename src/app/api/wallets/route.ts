@@ -505,7 +505,7 @@ export async function GET(req: NextRequest) {
     if (walletData.length === 0) {
       const prices = await getCoinGeckoPrices();
       const sparklines = await getSparklineData(SPARKLINE_COINS);
-      return NextResponse.json({ wallets: [], prices: {}, sparklines: {} });
+      return NextResponse.json({ wallets: [], prices, sparklines, transactions: [] });
     }
 
     // 2. Fetch all prices (multi-currency) concurrently with on-chain fetches
@@ -518,14 +518,16 @@ export async function GET(req: NextRequest) {
     const solAddrs = solWallets.map(w => w.address);
     const ethAddrs = ethWallets.map(w => w.address);
 
-    // 3. Batch on-chain fetches (balances only — transactions fetched client-side)
-    const [solBalancesP, solTokenAccountsP, ethBalancesP, ethTokenBalancesP, prices, sparklines] = await Promise.all([
+    // 3. Batch on-chain fetches (balances + transactions)
+    const [solBalancesP, solTokenAccountsP, ethBalancesP, ethTokenBalancesP, prices, sparklines, solTxsP, ethTxsP] = await Promise.all([
       getSolBalancesBatch(solAddrs),
       getSolTokenAccountsBatch(solAddrs),
       getEthBalancesBatch(ethAddrs),
       getErc20BalancesBatch(ethAddrs, ETH_STABLECOINS),
       pricesP,
       sparklinesP,
+      getSolTransactionsBatch(solAddrs),
+      getEthTransactionsBatch(ethAddrs),
     ]);
 
     // 4. Build Solana wallet results
@@ -627,7 +629,10 @@ export async function GET(req: NextRequest) {
     });
 
     const finalWallets = [...solResults, ...ethResults];
-    return NextResponse.json({ wallets: finalWallets, prices, sparklines });
+    const allTransactions = [...(solTxsP || []), ...(ethTxsP || [])]
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, 50);
+    return NextResponse.json({ wallets: finalWallets, prices, sparklines, transactions: allTransactions });
   } catch (err: any) {
     console.error('Wallet fetch error:', err);
     return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });

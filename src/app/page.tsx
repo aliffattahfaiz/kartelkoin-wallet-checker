@@ -65,6 +65,7 @@ interface ApiResponse {
   wallets: Wallet[];
   prices: PriceMap;
   sparklines: Record<string, number[]>;
+  transactions: Transaction[];
 }
 
 // ── Theme & Currency ────────────────────────────────────────────────────
@@ -340,7 +341,7 @@ export default function WalletChecker() {
       setWallets(data.wallets);
       setPrices(data.prices);
       setSparklines(data.sparklines);
-      setTransactions([]);
+      setTransactions(data.transactions || []);
       setLastRefreshed(new Date());
     } catch (err: any) {
       setError(err.message || 'Something went wrong');
