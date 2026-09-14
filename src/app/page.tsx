@@ -372,8 +372,8 @@ export default function WalletChecker() {
     const solSem = sem(6);
 
     // Solana: fetch signatures per address, then getTransaction details
-    const sigLimit = 5; // per address
-    const sigAddrs = solAddrs.slice(0, 20);
+    const sigLimit = 3; // per address
+    const sigAddrs = solAddrs.slice(0, 10);
 
     // Phase 1: Fetch all signatures in parallel (limited concurrency)
     const allSigs: Array<{ signature: string; blockTime: number | null; addr: string }> = [];
